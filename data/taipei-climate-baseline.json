@@ -1,0 +1,20 @@
+{
+  "cityId": "taipei",
+  "cityName": "Taipei Climate Resilience Scenario",
+  "coordinates": { "latitude": 25.033, "longitude": 121.5654 },
+  "countryCode": "TWN",
+  "sourceNote": "Teaching baseline for offline play. Values represent a warm-season climate-risk profile for Taipei-style heatwave and heavy-rain resilience missions. Runtime adapters can replace these values with Open-Meteo historical weather, NASA POWER, World Bank, UNSD SDG, and optional OpenAQ responses.",
+  "baseline": {
+    "meanTemperatureC": 28.4,
+    "temperatureAnomalyC": 1.4,
+    "heatwaveDaysPerSeason": 18,
+    "tropicalNightsPerSeason": 64,
+    "monthlyPrecipitationMm": 265,
+    "precipitationAnomalyRatio": 1.18,
+    "heavyRainDaysPerSeason": 8,
+    "pm25UgM3": 14.8,
+    "solarKwhM2Day": 3.78,
+    "population": 2490000,
+    "urbanPopulationRatio": 0.95
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "engine": "three",
+  "shippingFormat": "glb",
+  "productionAssetSlots": [
+    {
+      "key": "city.district.coastal",
+      "path": "/assets/models/city-district-coastal.glb",
+      "purpose": "Flood-prone waterfront district, used for coastal adaptation missions."
+    },
+    {
+      "key": "city.district.downtown",
+      "path": "/assets/models/city-district-downtown.glb",
+      "purpose": "Dense heat-island district with towers, traffic corridors, and rooftop solar."
+    },
+    {
+      "key": "city.district.river",
+      "path": "/assets/models/city-district-river.glb",
+      "purpose": "River floodplain district with wetlands, embankments, and sponge-city upgrades."
+    },
+    {
+      "key": "fx.heat-haze",
+      "path": "/assets/textures/fx-heat-haze.ktx2",
+      "purpose": "Compressed heat shimmer texture for post-process or particle materials."
+    },
+    {
+      "key": "fx.rain-burst",
+      "path": "/assets/textures/fx-rain-burst.ktx2",
+      "purpose": "Compressed rain streak texture for storm turns."
+    }
+  ],
+  "prototypePolicy": "If a GLB asset is missing, the renderer uses engine-generated 3D proxy meshes so the simulation remains playable. Production builds should replace these with commissioned or licensed GLB assets."
+}
