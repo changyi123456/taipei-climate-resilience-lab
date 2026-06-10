@@ -39,6 +39,14 @@ npm run dev
 npm run build
 ```
 
+## GitHub Pages 發布
+
+本專案使用 `gh-pages` 分支放置已建置完成的靜態檔。GitHub Pages 設定請選：
+
+- Source: `Deploy from a branch`
+- Branch: `gh-pages`
+- Folder: `/ (root)`
+
 ## 自動化 QA
 
 啟動本機 dev server 後可執行：
