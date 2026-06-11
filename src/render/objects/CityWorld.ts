@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CELL_GRID_SIZE, CELL_INFO } from '../../game/simulation/cells';
+import { CityDecor } from './CityDecor';
 import { clamp } from '../../game/simulation/math';
 import { getPolicy } from '../../game/simulation/policies';
 import type {
@@ -110,6 +111,10 @@ export class CityWorld {
   private missionStarted = false;
   private dataLayerId: DataLayerId = 'none';
   private lastState!: CityState;
+  private readonly decor: CityDecor;
+  /** 地格轉換閃光：tile → 起始秒數。 */
+  private readonly tileFlashes = new Map<THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>, number>();
+  private readonly prevCellsKeys = new Map<string, string>();
 
   constructor(scene: THREE.Scene, state: CityState) {
     this.scene = scene;
@@ -127,6 +132,13 @@ export class CityWorld {
       this.districtVisuals.set(state.districts[index].id, visual);
       this.root.add(visual.root);
     }
+
+    // 美術升級模組：地格實體（樹/太陽能/避難所）+ 車流 + 鳥群 + 雲 + 街區標籤
+    const districtOrigins = new Map<string, THREE.Vector3>();
+    for (const [id, visual] of this.districtVisuals) {
+      districtOrigins.set(id, visual.root.position.clone());
+    }
+    this.decor = new CityDecor(this.root, districtOrigins);
 
     const { points, material } = this.createAtmosphere();
     this.haze = points;
@@ -225,11 +237,18 @@ export class CityWorld {
 
       // P2 地格磚：依地格類型著色；切到資料圖層時隱藏，讓科學色階可見
       const tilesVisible = this.dataLayerId === 'none';
+      const prevKey = this.prevCellsKeys.get(district.id);
+      const cellsKey = district.cells.join(',');
       visual.cellTiles.forEach((tile, cellIndex) => {
         tile.visible = tilesVisible;
         const cellType = district.cells[cellIndex] ?? 'pavement';
         tile.material.color.setHex(CELL_INFO[cellType].color);
+        // 地格被政策轉換 → 白光閃爍標記（在 tick 中衰減）
+        if (prevKey && prevKey.split(',')[cellIndex] !== cellType) {
+          this.tileFlashes.set(tile, this.elapsedSeconds);
+        }
       });
+      this.prevCellsKeys.set(district.id, cellsKey);
 
       visual.waterOverlay.visible = false;
       visual.heatDome.visible = false;
@@ -259,6 +278,8 @@ export class CityWorld {
       this.triggerHazardFx(state.currentChallenge.soundCue);
       this.missionStarted = true;
     }
+
+    this.decor.update(state, this.dataLayerId);
   }
 
   playYearTransition(state: CityState): void {
@@ -282,6 +303,29 @@ export class CityWorld {
 
     this.haze.rotation.y = Math.sin((elapsedSeconds + this.clockOffset) * 0.08) * 0.06;
     this.haze.position.y = 2.2 + Math.sin(elapsedSeconds * 0.42) * 0.12;
+
+    // 美術升級：車流 / 鳥群 / 雲動畫
+    this.decor.tick(elapsedSeconds);
+
+    // 選取街區：呼吸式脈動外框
+    for (const visual of this.districtVisuals.values()) {
+      if (visual.selectedOutline.visible) {
+        visual.selectedOutline.material.opacity = 0.55 + Math.sin(elapsedSeconds * 3.2) * 0.35;
+      }
+    }
+
+    // 地格轉換閃光衰減（1.4 秒淡出）
+    for (const [tile, start] of this.tileFlashes) {
+      const age = elapsedSeconds - start;
+      const strength = Math.max(0, 1 - age / 1.4);
+      if (strength <= 0) {
+        tile.material.emissiveIntensity = 0;
+        this.tileFlashes.delete(tile);
+      } else {
+        tile.material.emissive.setHex(0xfff3d0);
+        tile.material.emissiveIntensity = strength * 1.4;
+      }
+    }
     this.animateEventParticles(elapsedSeconds);
     this.animatePolicyFx(elapsedSeconds);
     this.animateHazardFx(elapsedSeconds);
@@ -611,6 +655,21 @@ export class CityWorld {
     root.add(buildings);
     this.pickables.push(buildings);
 
+    // 美術升級：屋頂水塔 + archetype 專屬剪影（工業煙囪 / 海港貨櫃與岸吊）
+    const rooftopProps = this.createRooftopProps(district, index);
+    rooftopProps.userData.districtId = district.id;
+    root.add(rooftopProps);
+    if (district.archetype === 'industrial') {
+      const chimneys = this.createChimneys(index);
+      chimneys.userData.districtId = district.id;
+      root.add(chimneys);
+    }
+    if (district.archetype === 'coastal') {
+      const containers = this.createContainers(index);
+      containers.userData.districtId = district.id;
+      root.add(containers);
+    }
+
     if (district.id === 'core') {
       const landmark = this.createTaipeiLandmark(buildingMaterial);
       landmark.userData.districtId = district.id;
@@ -811,6 +870,7 @@ export class CityWorld {
     mesh.receiveShadow = true;
 
     const dummy = new THREE.Object3D();
+    const tint = new THREE.Color();
     for (let i = 0; i < count; i += 1) {
       const spec = getBuildingSpec(district, seed, i);
       dummy.position.set(spec.x, spec.baseY + spec.height / 2, spec.z);
@@ -818,10 +878,106 @@ export class CityWorld {
       dummy.rotation.y = spec.rotationY;
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
+
+      // 每棟建築明度/色溫微抖動（instanceColor 與材質色相乘），擺脫「複製箱子陣」感
+      const v = 0.82 + pseudo(seed * 53 + i * 7) * 0.36;
+      tint.setRGB(
+        v * (0.95 + pseudo(seed * 11 + i) * 0.1),
+        v,
+        v * (0.95 + pseudo(seed * 29 + i * 3) * 0.12)
+      );
+      mesh.setColorAt(i, tint);
     }
 
     mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     return mesh;
+  }
+
+  /** 屋頂道具：約 1/4 較高建築放水塔，天際線層次最便宜的升級。 */
+  private createRooftopProps(district: DistrictState, seed: number): THREE.InstancedMesh {
+    const count = getBuildingCount(district);
+    const mesh = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.07, 0.07, 0.16, 8),
+      new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.6, metalness: 0.35 }),
+      count
+    );
+    const dummy = new THREE.Object3D();
+    let used = 0;
+    for (let i = 0; i < count; i += 1) {
+      const spec = getBuildingSpec(district, seed, i);
+      if (spec.height < 1.1 || pseudo(seed * 71 + i * 13) > 0.28) continue;
+      dummy.position.set(
+        spec.x + (pseudo(seed + i) - 0.5) * spec.scaleX * 0.4,
+        spec.baseY + spec.height + 0.08,
+        spec.z + (pseudo(seed * 3 + i) - 0.5) * spec.scaleZ * 0.4
+      );
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(0.8 + pseudo(seed * 5 + i) * 0.5);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(used, dummy.matrix);
+      used += 1;
+    }
+    mesh.count = used;
+    mesh.instanceMatrix.needsUpdate = true;
+    return mesh;
+  }
+
+  /** 工業區煙囪：深磚紅圓柱 + 白色警示環。 */
+  private createChimneys(seed: number): THREE.Group {
+    const group = new THREE.Group();
+    const body = new THREE.MeshStandardMaterial({ color: 0x8a4a3a, roughness: 0.8 });
+    const band = new THREE.MeshStandardMaterial({ color: 0xe8e2d4, roughness: 0.6 });
+    for (let i = 0; i < 3; i += 1) {
+      const height = 1.5 + pseudo(seed * 17 + i) * 0.9;
+      const x = -1.6 + i * 1.1 + (pseudo(seed + i) - 0.5) * 0.5;
+      const z = 1.4 + (pseudo(seed * 7 + i) - 0.5) * 1.2;
+      const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, height, 8), body);
+      chimney.position.set(x, 0.2 + height / 2, z);
+      chimney.castShadow = true;
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.12, 8), band);
+      ring.position.set(x, 0.2 + height - 0.15, z);
+      group.add(chimney, ring);
+    }
+    return group;
+  }
+
+  /** 海港區貨櫃堆：彩色小盒陣 + 簡易岸吊。 */
+  private createContainers(seed: number): THREE.Group {
+    const group = new THREE.Group();
+    const palette = [0xc25b4e, 0x3f7fb5, 0xd9a440, 0x4f9e6b];
+    for (let i = 0; i < 10; i += 1) {
+      const material = new THREE.MeshStandardMaterial({
+        color: palette[Math.floor(pseudo(seed * 13 + i) * palette.length)],
+        roughness: 0.65,
+        metalness: 0.2
+      });
+      const container = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.2, 0.22), material);
+      const stack = Math.floor(pseudo(seed * 31 + i) * 2);
+      container.position.set(
+        1.2 + (i % 4) * 0.58,
+        0.3 + stack * 0.21,
+        1.5 + Math.floor(i / 4) * 0.3
+      );
+      container.rotation.y = (pseudo(seed + i) - 0.5) * 0.08;
+      container.castShadow = true;
+      group.add(container);
+    }
+
+    // 岸吊：門型架 + 斜臂
+    const steel = new THREE.MeshStandardMaterial({ color: 0x4d7f9e, roughness: 0.5, metalness: 0.4 });
+    const legGeometry = new THREE.BoxGeometry(0.07, 1.5, 0.07);
+    for (const [lx, lz] of [[-0.3, 0], [0.3, 0]] as const) {
+      const leg = new THREE.Mesh(legGeometry, steel);
+      leg.position.set(2.0 + lx, 0.95, 1.0 + lz);
+      group.add(leg);
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.08), steel);
+    beam.position.set(2.0, 1.7, 1.0);
+    beam.rotation.z = -0.12;
+    group.add(beam);
+
+    return group;
   }
 
   private createWindowCluster(
@@ -1777,6 +1933,7 @@ export class CityWorld {
         positions[offset] += Math.sin(elapsedSeconds * 6 + i) * 0.014;
         if (positions[offset + 1] > 4.8) resetPolicyParticle(positions, i, category);
       } else if (category === 'cooling') {
+        // 降溫：高處冷霧緩緩下沉
         // 降溫：高處冷霧緩緩下沉
         positions[offset + 1] -= 0.024 + pseudo(i * 9) * 0.014;
         positions[offset] += Math.sin(elapsedSeconds * 2 + i) * 0.007;
