@@ -269,12 +269,13 @@ export function computeDistrictScience(
   // 熱負荷採非線性（Gasparrini et al. 2015 曲線形狀）：低暴露幾乎無負荷，
   // 超過門檻後加速上升；夜間高溫與 PM2.5 對健康負荷大。
   const healthIndex = clamp(
-    district.healthIndex * 0.5 +
+    district.baselineHealthIndex * 0.5 +
       (100 - heatHealthBurden(heatExposure)) * 0.18 +
       (100 - floodExposure) * 0.12 +
       (100 - airPollution) * 0.16 +
       district.coolingAccess * 13 +
-      district.equityIndex * 0.08
+      district.equityIndex * 0.08 +
+      district.healthModifier
   );
 
   // ── 韌性：調適能力（防洪、綠基盤、運輸、太陽能）抵減各風險 ──
@@ -286,7 +287,8 @@ export function computeDistrictScience(
       district.floodDefense * 17 +
       district.canopyCover * 14 +
       district.transitAccess * 8 +
-      district.solarCoverage * 7
+      district.solarCoverage * 7 +
+      district.resilienceModifier
   );
 
   return {

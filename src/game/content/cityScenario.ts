@@ -73,8 +73,8 @@ export const CIVIC_CHALLENGES: CivicChallenge[] = [
 ];
 
 export function createInitialDistricts(seed = 1): DistrictState[] {
-  // P2：每個街區先以 archetype 設計值建立，再產生對應的 4×4 地格，
-  // 之後 imperviousness/canopyCover/solarCoverage 由地格聚合（見 advanceTurn）。
+  // 每個街區先以 archetype 設計值建立，再產生對應的 4×4 地表格網；
+  // 政策落地後，面積型參數由格網聚合（見 advanceTurn）。
   return createDistrictBlueprints().map((district) => ({
     ...district,
     cells: generateInitialCells(district, seed)
@@ -101,7 +101,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 55,
       healthIndex: 58,
       equityIndex: 51,
-      resilienceIndex: 44
+      resilienceIndex: 44,
+      baselineHealthIndex: 58,
+      healthModifier: 0,
+      resilienceModifier: 0
     },
     {
       id: 'core',
@@ -121,7 +124,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 50,
       healthIndex: 61,
       equityIndex: 56,
-      resilienceIndex: 49
+      resilienceIndex: 49,
+      baselineHealthIndex: 61,
+      healthModifier: 0,
+      resilienceModifier: 0
     },
     {
       id: 'riverbend',
@@ -141,7 +147,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 41,
       healthIndex: 64,
       equityIndex: 58,
-      resilienceIndex: 46
+      resilienceIndex: 46,
+      baselineHealthIndex: 64,
+      healthModifier: 0,
+      resilienceModifier: 0
     },
     {
       id: 'industry',
@@ -161,7 +170,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 78,
       healthIndex: 49,
       equityIndex: 47,
-      resilienceIndex: 39
+      resilienceIndex: 39,
+      baselineHealthIndex: 49,
+      healthModifier: 0,
+      resilienceModifier: 0
     },
     {
       id: 'garden',
@@ -181,7 +193,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 33,
       healthIndex: 72,
       equityIndex: 64,
-      resilienceIndex: 61
+      resilienceIndex: 61,
+      baselineHealthIndex: 72,
+      healthModifier: 0,
+      resilienceModifier: 0
     },
     {
       id: 'hillside',
@@ -201,7 +216,10 @@ function createDistrictBlueprints(): Omit<DistrictState, 'cells'>[] {
       airPollution: 28,
       healthIndex: 75,
       equityIndex: 59,
-      resilienceIndex: 68
+      resilienceIndex: 68,
+      baselineHealthIndex: 75,
+      healthModifier: 0,
+      resilienceModifier: 0
     }
   ];
 }
@@ -217,6 +235,8 @@ export function createInitialCityState(
     scenario: options.scenario ?? DEFAULT_SCENARIO_ID,
     mode: options.mode ?? 'campaign',
     missionIndex: 0,
+    unlockedMissionIndex: 0,
+    completedMissionIds: [],
     cityName: '台北氣候韌性實驗城',
     coordinates: TAIPEI_COORDINATES,
     countryCode: 'TWN',
@@ -236,14 +256,17 @@ export function createInitialCityState(
     energySecurity: 55,
     educationScore: 42,
     sdgScore: 56,
+    cityModifiers: {},
+    turnPressure: {},
     climateSignals: signals,
     selectedDistrictId: 'core',
-    currentChallenge: getRandomChallengeForTurn(seed, 1),
-    mission: createHeatwaveMission(seed),
+    currentChallenge: getChallengeForMissionTurn('heatwave-watch', seed, 1),
+    mission: createHeatwaveMission(seed, 1),
     districts: createInitialDistricts(seed),
     appliedPolicies: [],
     eventLog: ['模擬城初始化：請啟動熱浪任務，觀察各區風險差異後再投資政策。'],
-    evidenceLog: []
+    evidenceLog: [],
+    selectedEvidenceIds: []
   };
 }
 
@@ -260,4 +283,26 @@ export function getRandomChallengeForTurn(
   const pool = CIVIC_CHALLENGES.filter((challenge) => challenge.id !== excludedChallengeId);
   const candidates = pool.length > 0 ? pool : CIVIC_CHALLENGES;
   return pickFromSeed(candidates, seed, turn, 0xc4a11);
+}
+
+const MISSION_CHALLENGE_POOLS: Record<string, string[]> = {
+  'heatwave-watch': ['heat-dome', 'energy-peak', 'budget-review'],
+  'typhoon-flood': ['typhoon-rainband', 'budget-review', 'heat-dome'],
+  'stagnant-smog': ['stagnant-air', 'budget-review', 'energy-peak'],
+  'energy-transition': ['energy-peak', 'stagnant-air', 'budget-review'],
+  'resilience-sandbox': CIVIC_CHALLENGES.map((challenge) => challenge.id)
+};
+
+/** 依章節挑選敘事一致的年度事件，同 seed 與回合仍保持可重現。 */
+export function getChallengeForMissionTurn(
+  missionId: string,
+  seed: number,
+  turn: number,
+  excludedChallengeId?: string
+): CivicChallenge {
+  const allowedIds = MISSION_CHALLENGE_POOLS[missionId] ?? MISSION_CHALLENGE_POOLS['resilience-sandbox'];
+  const pool = CIVIC_CHALLENGES.filter(
+    (challenge) => allowedIds.includes(challenge.id) && challenge.id !== excludedChallengeId
+  );
+  return pickFromSeed(pool.length > 0 ? pool : CIVIC_CHALLENGES, seed, turn, missionId.length, 0xc4a11);
 }

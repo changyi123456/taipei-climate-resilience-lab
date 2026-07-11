@@ -1,10 +1,9 @@
 /**
- * cells.ts — P2 格網建造系統的核心（純函式）。
+ * cells.ts — 政策地表格網的核心（純函式）。
  *
- * 每個街區是 4×4 = 16 格地格（cell）。地格是「地表的真實狀態」，
+ * 每個街區是 4×4 = 16 格地格（cell）。地格是政策落地後的地表狀態，
  * 科學模型的 imperviousness / canopyCover / solarCoverage 不再是手填參數，
- * 而是由地格統計聚合而來——玩家把樹種在哪裡，數字就從哪裡來。
- * 這是 SimCity 式空間決策與科學模型的接點。
+ * 而是由已採納政策造成的土地利用變化聚合而來。
  */
 
 import { randFromSeed } from './rng';
@@ -27,99 +26,59 @@ export type CellType =
 export const CELLS_PER_DISTRICT = 16;
 export const CELL_GRID_SIZE = 4;
 
-/** 玩家可直接建造的工具（P2 建造模式）。 */
-export type BuildTool = 'green' | 'permeable' | 'solar' | 'water';
-
 export interface CellInfo {
-  type: CellType;
-  label: string;
   /** 渲染地格磚的顏色。 */
   color: number;
-  /** 建造成本（百萬）；undefined = 不可直接建造。 */
-  buildCost?: number;
   /** 各地格對街區參數的貢獻（聚合用）。 */
   imperviousness: number;
   canopy: number;
   solar: number;
-  scienceNote: string;
 }
 
 export const CELL_INFO: Record<CellType, CellInfo> = {
   pavement: {
-    type: 'pavement',
-    label: '硬鋪面',
     color: 0x4d565e,
     imperviousness: 1,
     canopy: 0,
-    solar: 0,
-    scienceNote: '柏油與水泥吸熱儲熱、不透水，是熱島與逕流的主因。'
+    solar: 0
   },
   building: {
-    type: 'building',
-    label: '建築',
     color: 0x3a4a56,
     imperviousness: 1,
     canopy: 0,
-    solar: 0,
-    scienceNote: '屋頂與牆面同樣吸熱不透水，但可改造為太陽能或綠屋頂。'
+    solar: 0
   },
   green: {
-    type: 'green',
-    label: '樹冠綠地',
     color: 0x2e8b4f,
-    buildCost: 3,
     imperviousness: 0.05,
     canopy: 1,
-    solar: 0,
-    scienceNote: '樹蔭減少地表吸熱、蒸散帶走熱量（Ziter et al. 2019：樹冠 +10% ≈ −2.5°C）。'
+    solar: 0
   },
   permeable: {
-    type: 'permeable',
-    label: '透水鋪面',
     color: 0x7d9c6a,
-    buildCost: 4,
     imperviousness: 0.2,
     canopy: 0.1,
-    solar: 0,
-    scienceNote: '讓雨水滲入或暫存，降低逕流係數（合理化公式 C ≈ 0.05+0.85×不透水率）。'
+    solar: 0
   },
   water: {
-    type: 'water',
-    label: '滯洪水體',
     color: 0x2d7fa8,
-    buildCost: 5,
     imperviousness: 0,
     canopy: 0,
-    solar: 0,
-    scienceNote: '滯洪池與濕地暫存洪峰水量，亦有局部蒸發降溫效果。'
+    solar: 0
   },
   solar: {
-    type: 'solar',
-    label: '太陽能',
     color: 0x8a6fc9,
-    buildCost: 4,
     imperviousness: 0.9,
     canopy: 0,
-    solar: 1,
-    scienceNote: '屋頂光電提高能源安全並降低電網尖峰的化石燃料依賴。'
+    solar: 1
   },
   shelter: {
-    type: 'shelter',
-    label: '避難設施',
     color: 0xc9913d,
     imperviousness: 0.9,
     canopy: 0,
-    solar: 0,
-    scienceNote: '冷房避難點不改變氣溫（Hazard），但降低脆弱族群的熱暴露（Vulnerability）。'
+    solar: 0
   }
 };
-
-export const BUILD_TOOLS: ReadonlyArray<{ tool: BuildTool; info: CellInfo }> = [
-  { tool: 'green', info: CELL_INFO.green },
-  { tool: 'permeable', info: CELL_INFO.permeable },
-  { tool: 'solar', info: CELL_INFO.solar },
-  { tool: 'water', info: CELL_INFO.water }
-];
 
 export interface DerivedSurface {
   imperviousness: number;
@@ -238,20 +197,5 @@ export function convertCellsForPolicy(
     convert(['building', 'pavement'], 'solar', count);
   }
 
-  return next;
-}
-
-/** 玩家直接建造一格。回傳新 cells；不可建造（同型或建築上種樹等）回傳 undefined。 */
-export function buildCell(cells: CellType[], index: number, tool: BuildTool): CellType[] | undefined {
-  if (index < 0 || index >= cells.length) return undefined;
-  const current = cells[index];
-  if (current === tool) return undefined;
-  // 規則：太陽能只能蓋在建築/硬鋪面上；綠地/透水/水體不能直接蓋掉建築（要先有都更政策——教學取捨）
-  if (tool === 'solar' && current !== 'building' && current !== 'pavement') return undefined;
-  if (tool !== 'solar' && current === 'building') return undefined;
-  if (current === 'shelter') return undefined;
-
-  const next = [...cells];
-  next[index] = tool;
   return next;
 }

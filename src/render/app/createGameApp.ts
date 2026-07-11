@@ -8,17 +8,19 @@ import { createPostProcessing } from '../post/createPostProcessing';
 import { createCamera, updateCameraFrustum } from './createCamera';
 import { createRenderer } from './createRenderer';
 import { createScene } from './createScene';
+import { detectQualityTier, QUALITY_PROFILES } from './quality';
+import type { QualityTier } from './quality';
 
 export interface GameAppCallbacks {
   onSelectDistrict: (districtId: string) => void;
-  /** 點到地格磚時觸發（P2 建造模式）。回傳 true 表示已處理，不再觸發街區選取。 */
-  onPickCell?: (districtId: string, cellIndex: number) => boolean;
 }
 
 export interface GameApp {
   update: (state: CityState) => void;
   playYearTransition: (state: CityState) => void;
   setDataLayer: (layer: DataLayerId) => void;
+  setQuality: (tier: QualityTier) => void;
+  getQuality: () => QualityTier;
   start: () => void;
   dispose: () => void;
 }
@@ -31,21 +33,23 @@ export function createGameApp(
   const renderer = createRenderer(canvas);
   const scene = createScene();
   const camera = createCamera();
-  const composer = createPostProcessing(renderer, scene, camera);
+  const postProcessing = createPostProcessing(renderer, scene, camera);
+  const composer = postProcessing.composer;
   const controls = createControls(camera, canvas);
   const cityWorld = new CityWorld(scene, initialState);
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const clock = new THREE.Clock();
 
   let frameId = 0;
   let disposed = false;
   let paused = document.hidden;
-  // 限制到 ~40fps：教學沙盤不需要 60fps，可大幅降低 GPU 持續負載（bloom 為填充率瓶頸）。
-  const minFrameMs = 1000 / 40;
+  let qualityTier: QualityTier = detectQualityTier();
+  let minFrameMs = 1000 / QUALITY_PROFILES[qualityTier].targetFps;
   let lastFrameMs = 0;
+  let elapsedSeconds = 0;
+  let previousFrameMs = window.performance.now();
 
-  const resize = () => resizeRenderer(renderer, composer, camera);
+  const resize = () => resizeRenderer(renderer, composer, camera, qualityTier);
   window.addEventListener('resize', resize);
 
   // 分頁隱藏時暫停渲染，避免背景持續吃 GPU。
@@ -63,16 +67,20 @@ export function createGameApp(
     const intersections = raycaster.intersectObjects(cityWorld.pickables, true);
     const hit = intersections[0]?.object ?? null;
 
-    // 建造模式優先：點到地格磚先交給建造處理
-    const cellTarget = cityWorld.findCellTarget(hit);
-    if (cellTarget && callbacks.onPickCell?.(cellTarget.districtId, cellTarget.cellIndex)) {
-      return;
-    }
-
     const districtId = cityWorld.findDistrictId(hit);
     if (districtId) callbacks.onSelectDistrict(districtId);
   };
   canvas.addEventListener('pointerdown', onPointerDown);
+
+  const setQuality = (tier: QualityTier) => {
+    qualityTier = tier;
+    const profile = QUALITY_PROFILES[tier];
+    minFrameMs = 1000 / profile.targetFps;
+    renderer.shadowMap.enabled = profile.shadows;
+    postProcessing.setQuality(tier);
+    resize();
+  };
+  setQuality(qualityTier);
 
   const render = (nowMs = 0) => {
     if (disposed) return;
@@ -84,8 +92,10 @@ export function createGameApp(
     if (nowMs - lastFrameMs < minFrameMs) return;
     lastFrameMs = nowMs;
 
-    const elapsed = clock.getElapsedTime();
-    cityWorld.tick(elapsed);
+    const deltaSeconds = Math.min(0.1, Math.max(0, (nowMs - previousFrameMs) / 1000));
+    previousFrameMs = nowMs;
+    elapsedSeconds += deltaSeconds;
+    cityWorld.tick(elapsedSeconds);
     controls.update();
     composer.render();
   };
@@ -94,6 +104,8 @@ export function createGameApp(
     update: (state) => cityWorld.updateFromState(state),
     playYearTransition: (state) => cityWorld.playYearTransition(state),
     setDataLayer: (layer) => cityWorld.setDataLayer(layer),
+    setQuality,
+    getQuality: () => qualityTier,
     start: () => {
       resize();
       render();
@@ -105,6 +117,8 @@ export function createGameApp(
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('pointerdown', onPointerDown);
       controls.dispose();
+      cityWorld.dispose();
+      composer.dispose();
       renderer.dispose();
     }
   };
@@ -127,13 +141,14 @@ function createControls(camera: THREE.OrthographicCamera, canvas: HTMLCanvasElem
 function resizeRenderer(
   renderer: THREE.WebGLRenderer,
   composer: EffectComposer,
-  camera: THREE.OrthographicCamera
+  camera: THREE.OrthographicCamera,
+  qualityTier: QualityTier
 ): void {
   const width = window.innerWidth;
   const height = window.innerHeight;
 
   // bloom 與全螢幕後製為填充率瓶頸；上限 1.5 在高 DPI 螢幕上明顯省 GPU 又幾乎看不出畫質差。
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY_PROFILES[qualityTier].pixelRatioCap));
   renderer.setSize(width, height, false);
   composer.setSize(width, height);
   updateCameraFrustum(camera, width, height);

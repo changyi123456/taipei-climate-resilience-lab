@@ -1,5 +1,7 @@
 # 氣候韌性實驗室 — 優化評估報告（2026-06）
 
+> 歷史評估：其中的格網建造提案已由 2026-07 的產品決策取代。現行核心鎖定政策審議；地表格網只用於呈現政策結果，不提供玩家直接建造。
+
 評估範圍：`src/` 全部模組（scienceModel、climateDataService、apiClients、advanceTurn、cityScenario、missions、policies、CityWorld、HUD、audio）。
 目標：朝「模擬城市（SimCity）級沉浸體驗 + 嚴謹科學教育內容」演進。
 

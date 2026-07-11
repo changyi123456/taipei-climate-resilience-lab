@@ -19,6 +19,7 @@ export const POLICIES: PolicyAction[] = [
       '降溫通道與可步行陰影增加，健康指標與韌性指標上升。',
       '連續綠地可支持鳥類、昆蟲與土壤生態，因此生物多樣性提高。'
     ],
+    tradeoffs: ['樹木需要長期灌溉與養護；若只改善高房價區，可能加劇綠色仕紳化。'],
     cityEffects: { biodiversity: 4, publicTrust: 1 },
     districtEffects: {
       canopyCover: 0.09,
@@ -45,7 +46,8 @@ export const POLICIES: PolicyAction[] = [
       '弱勢族群有更容易抵達的避難點，公平指標上升。',
       '熱衰竭與熱中暑風險下降，公共健康改善。'
     ],
-    cityEffects: { publicHealth: 2, equity: 3 },
+    tradeoffs: ['熱浪期間會增加尖峰用電，必須搭配能源管理與弱勢戶補助。'],
+    cityEffects: { publicHealth: 2, equity: 3, energySecurity: -2, emissions: 1 },
     districtEffects: {
       coolingAccess: 0.14,
       equityIndex: 4,
@@ -71,6 +73,7 @@ export const POLICIES: PolicyAction[] = [
       '排水與滯洪能力提高，洪水防護上升。',
       '淹水壓力較低時，街區韌性指標提升。'
     ],
+    tradeoffs: ['施工期會影響交通與商家出入，且透水鋪面需要定期清淤。'],
     cityEffects: { publicTrust: 1 },
     districtEffects: {
       imperviousness: -0.08,
@@ -96,7 +99,8 @@ export const POLICIES: PolicyAction[] = [
       '硬鋪面轉為自然地表，不透水率下降。',
       '棲地面積與水陸交界增加，生物多樣性大幅提升。'
     ],
-    cityEffects: { biodiversity: 8, floodRisk: -3 },
+    tradeoffs: ['需要保留土地並處理搬遷補償；若缺乏共識，短期可能降低公眾信任。'],
+    cityEffects: { biodiversity: 8, floodRisk: -3, publicTrust: -1 },
     districtEffects: {
       floodDefense: 0.16,
       canopyCover: 0.05,
@@ -122,6 +126,7 @@ export const POLICIES: PolicyAction[] = [
       '使用化石燃料發電的需求降低，城市排放下降。',
       '學校與公共屋頂示範可連結能源教育，教育分數上升。'
     ],
+    tradeoffs: ['夜間與陰雨時仍需儲能或其他電源；設備回收也必須納入全生命週期。'],
     cityEffects: { emissions: -5, energySecurity: 6, educationScore: 2 },
     districtEffects: {
       solarCoverage: 0.13,
@@ -146,7 +151,8 @@ export const POLICIES: PolicyAction[] = [
       '交通排放減少，城市排放與空氣品質風險降低。',
       '通勤選擇變多，公共信任與健康指標改善。'
     ],
-    cityEffects: { emissions: -6, airQualityRisk: -3, publicTrust: 2 },
+    tradeoffs: ['車隊與充電設施會增加初期電力負載，路權重新分配可能引發反對。'],
+    cityEffects: { emissions: -6, airQualityRisk: -3, publicTrust: 2, energySecurity: -1 },
     districtEffects: {
       transitAccess: 0.12,
       healthIndex: 3,
@@ -171,6 +177,7 @@ export const POLICIES: PolicyAction[] = [
       '污染暴露降低，健康指標提高。',
       '城市平均空氣品質風險降低。'
     ],
+    tradeoffs: ['企業需要承擔設備與稽核成本；必須避免把污染產業直接外移到其他社區。'],
     cityEffects: { airQualityRisk: -4, publicHealth: 1 },
     districtEffects: {
       industryLoad: -0.1,
@@ -196,6 +203,7 @@ export const POLICIES: PolicyAction[] = [
       '政策分配更有依據，公共信任提升。',
       '看見弱勢區域的暴露差異，公平指標上升。'
     ],
+    tradeoffs: ['感測器有校正誤差與隱私議題，公開資料必須附上品質標記與限制。'],
     cityEffects: {
       educationScore: 8,
       publicTrust: 5,

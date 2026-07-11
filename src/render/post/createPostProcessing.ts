@@ -4,6 +4,12 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import type { QualityTier } from '../app/quality';
+
+export interface PostProcessingController {
+  composer: EffectComposer;
+  setQuality: (tier: QualityTier) => void;
+}
 
 /**
  * 後製管線（畫面質感提升版）：
@@ -14,7 +20,7 @@ export function createPostProcessing(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera
-): EffectComposer {
+): PostProcessingController {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
@@ -71,7 +77,7 @@ export function createPostProcessing(
         color = (color - 0.5) * uContrast + 0.5;
 
         // 暖冷分色：暗部染冷、亮部染暖，提升層次與電影感
-        vec3 splitTone = mix(uWarmShadows / 255.0 * 3.0, uWarmHighlights / 255.0, smoothstep(0.0, 1.0, luma));
+        vec3 splitTone = mix(uWarmShadows, uWarmHighlights, smoothstep(0.0, 1.0, luma));
         color = mix(color, color * (0.85 + splitTone * 0.6), 0.35);
 
         // 平滑暗角
@@ -90,5 +96,12 @@ export function createPostProcessing(
   composer.addPass(gradePass);
   composer.addPass(new OutputPass());
 
-  return composer;
+  return {
+    composer,
+    setQuality: (tier) => {
+      const enabled = tier === 'high';
+      bloom.enabled = enabled;
+      gradePass.enabled = enabled;
+    }
+  };
 }

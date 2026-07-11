@@ -81,7 +81,7 @@ import type { CellType } from './cells';
 export interface DistrictState {
   id: string;
   name: string;
-  /** P2 格網建造：4×4 地格（地表狀態的單一真實來源）。 */
+  /** 政策落地後的 4×4 地表格網（科學模型與 3D 呈現的共同來源）。 */
   cells: CellType[];
   archetype: DistrictArchetype;
   population: number;
@@ -99,6 +99,12 @@ export interface DistrictState {
   healthIndex: number;
   equityIndex: number;
   resilienceIndex: number;
+  /** 不隨重算漂移的健康基準；政策效果另外記在 healthModifier。 */
+  baselineHealthIndex: number;
+  /** 政策累積的健康照護能力修正。 */
+  healthModifier: number;
+  /** 政策累積的街區韌性修正。 */
+  resilienceModifier: number;
   /** 都市熱島升溫（°C，相對參考街區）— 科學中間量，供 CER 舉證。 */
   uhiDeltaC?: number;
   /** 逕流係數 0–1 — 科學中間量。 */
@@ -118,6 +124,8 @@ export interface PolicyAction {
   scienceNote: string;
   classroomPrompt: string;
   effectExplanation: string[];
+  /** 需要玩家理解的成本、副作用或執行限制。 */
+  tradeoffs?: string[];
   cityEffects?: Partial<Record<CityMetricKey, number>>;
   districtEffects?: Partial<Record<DistrictMetricKey, number>>;
 }
@@ -127,6 +135,7 @@ export interface AppliedPolicyLog {
   year: number;
   policyId: string;
   policyName: string;
+  missionId?: string;
   targetDistrictId?: string;
   note: string;
 }
@@ -144,6 +153,7 @@ export type MissionObjectiveMetric =
   | CityMetricKey
   | 'budget'
   | 'coolingInterventions'
+  | 'selectedEvidence'
   | 'turn';
 
 export interface MissionObjectiveDefinition {
@@ -169,8 +179,13 @@ export interface MissionState {
   stakes: string;
   turnLimit: number;
   policyLimitPerTurn: number;
+  /** 任務開始時的全域回合，讓章節可以保留城市狀態而不重置時間。 */
+  startTurn: number;
   status: MissionStatus;
   objectives: MissionObjectiveProgress[];
+  advisorName: string;
+  advisorRole: string;
+  advisorMessage: string;
   debriefTitle?: string;
   debriefBody?: string;
 }
@@ -189,6 +204,7 @@ import type { SspScenarioId } from './scenarios';
 
 /** 每回合自動收集的科學證據（CER 舉證素材）。 */
 export interface EvidenceEntry {
+  id: string;
   turn: number;
   year: number;
   /** 證據種類：氣候訊號、街區科學量、政策效果。 */
@@ -208,6 +224,10 @@ export interface CityState {
   mode: 'campaign' | 'sandbox';
   /** 戰役章節索引（0 起算）。 */
   missionIndex: number;
+  /** 戰役已解鎖的最高章節。 */
+  unlockedMissionIndex: number;
+  /** 已完成章節 ID。 */
+  completedMissionIds: string[];
   cityName: string;
   coordinates: Coordinates;
   countryCode: string;
@@ -227,6 +247,10 @@ export interface CityState {
   energySecurity: number;
   educationScore: number;
   sdgScore: number;
+  /** 政策造成的永久城市修正；衍生指標不再寫回自己。 */
+  cityModifiers: Partial<Record<CityMetricKey, number>>;
+  /** 最近一次年度事件造成的暫時壓力，維持到下一次年度結算。 */
+  turnPressure: Partial<Record<CityMetricKey, number>>;
   climateSignals: ClimateSignals;
   selectedDistrictId: string;
   currentChallenge: CivicChallenge;
@@ -237,4 +261,6 @@ export interface CityState {
   eventLog: string[];
   /** CER 證據抽屜：每回合自動收集的科學證據。 */
   evidenceLog: EvidenceEntry[];
+  /** 玩家主動選入 CER 論證的證據。 */
+  selectedEvidenceIds: string[];
 }

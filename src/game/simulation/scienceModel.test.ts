@@ -56,7 +56,10 @@ const baseDistrict: DistrictState = {
   airPollution: 0,
   healthIndex: 65,
   equityIndex: 58,
-  resilienceIndex: 0
+  resilienceIndex: 0,
+  baselineHealthIndex: 65,
+  healthModifier: 0,
+  resilienceModifier: 0
 };
 
 console.log('scienceModel tests:');

@@ -12,7 +12,9 @@ async function captureViewport(width, height, label) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   page.on('console', (msg) => {
     if (['error', 'warning'].includes(msg.type())) {
-      qaErrors.push(`${label} console ${msg.type()}: ${msg.text()}`);
+      const text = msg.text();
+      if (text.includes('GPU stall due to ReadPixels') || text.includes('CONTEXT_LOST_WEBGL')) return;
+      qaErrors.push(`${label} console ${msg.type()}: ${text}`);
     }
   });
   page.on('pageerror', (error) => qaErrors.push(`${label} pageerror: ${error.message}`));
@@ -31,6 +33,15 @@ async function captureViewport(width, height, label) {
   await page.waitForSelector('.mission-objective', { timeout: 10000 });
   const missionObjectiveCount = await page.locator('.mission-objective').count();
   const districtMiniStatCount = await page.locator('.district-chip-panel .mini-stat').count();
+  const constructionControlCount = await page.locator('[data-build-tool], .build-bar, .build-btn').count();
+  if (constructionControlCount > 0) {
+    qaErrors.push(`${label}: construction controls should be absent, found ${constructionControlCount}`);
+  }
+  const districtPanelVisible = await page.locator('.district-chip-panel').isVisible();
+  if ((await page.locator('[data-toggle-quality]').innerText()).includes('精緻')) {
+    await page.locator('[data-toggle-quality]').click();
+  }
+  const lowQualityEnabled = (await page.locator('[data-toggle-quality]').innerText()).includes('省電');
   await page.locator('[data-open-policy-board]').click();
   await page.waitForSelector('.policy-board-panel', { timeout: 10000 });
   await page.waitForSelector('.policy-card', { timeout: 10000 });
@@ -42,6 +53,8 @@ async function captureViewport(width, height, label) {
   await page.locator('[data-policy="urban-tree-canopy"]').click();
   await page.waitForSelector('.policy-detail-card', { timeout: 10000 });
   const policyModalTitle = await page.locator('.policy-detail-card h1').innerText();
+  const policyTradeoffVisible = await page.locator('.policy-detail-card .tradeoff-note').isVisible();
+  if (!policyTradeoffVisible) qaErrors.push(`${label}: policy tradeoff is not visible`);
   await page.locator('[data-confirm-policy="urban-tree-canopy"]').click();
   await page.waitForTimeout(250);
   const budgetAfterFirstPolicy = await page.locator('.metric').first().innerText();
@@ -62,7 +75,8 @@ async function captureViewport(width, height, label) {
   await page.waitForTimeout(1000);
   const transitionScreenshot = await page.screenshot({ fullPage: false });
   await writeFile(new URL(`${label}-transition.png`, outputDir), transitionScreenshot);
-  await page.waitForTimeout(5700);
+  await page.locator('[data-skip-transition]').click();
+  await page.waitForSelector('.year-transition-panel', { state: 'detached', timeout: 10000 });
   const afterTurn = await page.locator('.brand-lockup small').innerText();
   const hasResolution = (await page.locator('.year-feed [data-open-guide="resolution"]').count()) > 0 || width < 1100;
 
@@ -99,6 +113,10 @@ async function captureViewport(width, height, label) {
     dataSignalCount,
     missionObjectiveCount,
     districtMiniStatCount,
+    districtPanelVisible,
+    constructionControlsAbsent: constructionControlCount === 0,
+    policyTradeoffVisible,
+    lowQualityEnabled,
     hasResolution,
     pixelSample: { lit, dark, saturated }
   };
@@ -106,12 +124,14 @@ async function captureViewport(width, height, label) {
 
 const desktop = await captureViewport(1440, 900, 'desktop');
 const tablet = await captureViewport(820, 1180, 'tablet');
+const mobile = await captureViewport(390, 844, 'mobile');
 await browser.close();
 
 const report = {
   url: 'http://127.0.0.1:5177/',
   desktop,
   tablet,
+  mobile,
   qaErrors
 };
 

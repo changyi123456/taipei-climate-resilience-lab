@@ -1,0 +1,5 @@
+local_path,category,runtime_use,source_url,author,version,asset_license,commercial_use,attribution,modifications,notes
+src/render/objects/CityWorld.ts,procedural-3d,city terrain buildings hazards,,Project authors,2026.07,Project code license pending owner decision,pending,,Generated at runtime with Three.js,No third-party media embedded
+src/render/objects/CityDecor.ts,procedural-3d,trees solar shelters cars birds clouds labels,,Project authors,2026.07,Project code license pending owner decision,pending,,Generated at runtime with Three.js,No third-party media embedded
+src/audio/gameAudio.ts,procedural-audio,fallback ambience and effects,,Project authors,2026.07,Project code license pending owner decision,pending,,Generated at runtime with Web Audio,External samples are not currently bundled
+public/data/taipei-climate-baseline.json,data,offline teaching baseline,,Project authors,2026.07,Project data license pending owner decision,pending,,Teaching baseline values,Document methodology before public data reuse

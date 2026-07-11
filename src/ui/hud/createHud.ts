@@ -14,6 +14,7 @@ import {
 } from './hudOverlays';
 import type { DataLayerId } from '../../render/objects/CityWorld';
 import type { SspScenarioId } from '../../game/simulation/scenarios';
+import type { QualityTier } from '../../render/app/quality';
 
 const DATA_LAYERS: Array<{ id: DataLayerId; label: string }> = [
   { id: 'none', label: '一般' },
@@ -44,10 +45,14 @@ export interface HudController {
   onResetMission: () => void;
   isAudioEnabled: () => boolean;
   isYearProcessing: () => boolean;
+  onSkipYearTransition: () => void;
   onToggleAudio: () => void;
   getDataLayer: () => DataLayerId;
   onSelectDataLayer: (layer: DataLayerId) => void;
   onSelectScenario: (scenario: SspScenarioId) => void;
+  onToggleEvidence: (evidenceId: string) => void;
+  getQualityTier: () => QualityTier;
+  onToggleQuality: () => void;
   onRestartGame: () => void;
   /** 開局/結算時選擇副本任務。 */
   onSelectMission: (index: number) => void;
@@ -57,10 +62,12 @@ export interface HudController {
 
 export interface Hud {
   render: () => void;
+  dispose: () => void;
 }
 
 export function createHud(root: HTMLElement, controller: HudController): Hud {
   root.className = 'hud-root';
+  root.tabIndex = -1;
 
   let selectedPolicyId: string | undefined;
   let guidePanel: GuidePanel | undefined;
@@ -73,6 +80,17 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
     const districtButton = target.closest<HTMLElement>('[data-district]');
     const guideButton = target.closest<HTMLElement>('[data-open-guide]');
     const confirmButton = target.closest<HTMLElement>('[data-confirm-policy]');
+
+    const evidenceButton = target.closest<HTMLElement>('[data-toggle-evidence]');
+    if (evidenceButton?.dataset.toggleEvidence) {
+      controller.onToggleEvidence(evidenceButton.dataset.toggleEvidence);
+      return;
+    }
+
+    if (target.closest('[data-skip-transition]')) {
+      controller.onSkipYearTransition();
+      return;
+    }
 
     if (target.closest('[data-open-policy-board]')) {
       policyBoardOpen = true;
@@ -88,6 +106,11 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
 
     if (target.closest('[data-restart-game]')) {
       controller.onRestartGame();
+      return;
+    }
+
+    if (target.closest('[data-toggle-quality]')) {
+      controller.onToggleQuality();
       return;
     }
 
@@ -199,6 +222,17 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
     }
   });
 
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      selectedPolicyId = undefined;
+      guidePanel = undefined;
+      policyBoardOpen = false;
+      evidenceOpen = false;
+      render();
+    }
+  };
+  window.addEventListener('keydown', onKeyDown);
+
   const render = () => {
     const state = controller.getState();
     const selectedDistrict =
@@ -218,7 +252,7 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
           <span class="brand-mark"></span>
           <div>
             <strong>${state.cityName}</strong>
-            <small>${state.year} 年 / ${state.mission.chapter} · 第 ${Math.min(state.turn, state.mission.turnLimit)} 回合${
+            <small>${state.year} 年 / ${state.mission.chapter} · 第 ${Math.min(state.turn - state.mission.startTurn + 1, state.mission.turnLimit)} 回合${
               state.mission.turnLimit > 100 ? '（無上限）' : `，共 ${state.mission.turnLimit} 回合`
             }</small>
           </div>
@@ -237,12 +271,14 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
         <span>圖層</span>
         ${DATA_LAYERS.map(
           (layer) =>
-            `<button type="button" class="layer-btn ${controller.getDataLayer() === layer.id ? 'active' : ''}" data-layer="${layer.id}">${layer.label}</button>`
+            `<button type="button" class="layer-btn ${controller.getDataLayer() === layer.id ? 'active' : ''}" data-layer="${layer.id}" aria-pressed="${controller.getDataLayer() === layer.id}">${layer.label}</button>`
         ).join('')}
         <button type="button" class="layer-btn evidence ${state.evidenceLog.length > 0 ? 'has-evidence' : ''}" data-open-evidence>
           證據抽屜（${state.evidenceLog.length}）
         </button>
         <button type="button" class="layer-btn restart" data-restart-game>重新開始</button>
+        <button type="button" class="layer-btn" data-toggle-quality>畫質：${controller.getQualityTier() === 'high' ? '精緻' : '省電'}</button>
+        ${dataLayerLegend(controller.getDataLayer())}
       </section>
 
       ${missionPanel(state)}
@@ -261,9 +297,34 @@ export function createHud(root: HTMLElement, controller: HudController): Hud {
       ${guidePanel === 'resolution' ? resolutionGuideOverlay(state.lastResolution) : ''}
       ${evidenceOpen ? evidenceOverlay(state) : ''}
     `;
+
+    const modals = root.querySelectorAll<HTMLElement>('.modal-scrim');
+    modals.forEach((modal) => {
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+    });
+    const activeModal = modals.item(modals.length - 1);
+    if (activeModal && !activeModal.contains(document.activeElement)) {
+      activeModal.querySelector<HTMLElement>('button:not([disabled]), [tabindex="0"]')?.focus();
+    }
   };
 
-  return { render };
+  return {
+    render,
+    dispose: () => window.removeEventListener('keydown', onKeyDown)
+  };
+}
+
+function dataLayerLegend(layer: DataLayerId): string {
+  if (layer === 'none') return '';
+  const labels: Record<Exclude<DataLayerId, 'none'>, [string, string]> = {
+    heat: ['低熱暴露', '高熱暴露'],
+    flood: ['低淹水風險', '高淹水風險'],
+    air: ['低空污', '高空污'],
+    uhi: ['−7°C', '+9°C'],
+    runoff: ['低逕流', '高逕流']
+  };
+  return `<div class="layer-legend" aria-label="圖層色階"><span>${labels[layer][0]}</span><i></i><span>${labels[layer][1]}</span></div>`;
 }
 
 function isGuidePanel(value: string | undefined): value is GuidePanel {

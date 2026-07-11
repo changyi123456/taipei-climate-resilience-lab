@@ -3,7 +3,7 @@
   "samples": {
     "cityAmbience": { "file": "city-ambience.mp3", "loop": true, "gain": 0.32, "role": "背景城市環境噪音（車流、街道），墊在音樂底下" },
     "spend": { "file": "cash-register.mp3", "loop": false, "gain": 0.6, "role": "政策實施時的花錢／收銀機聲" },
-    "policy": { "file": "policy-confirm.mp3", "loop": false, "gain": 0.5, "role": "政策確認／建造完成提示" },
+    "policy": { "file": "policy-confirm.mp3", "loop": false, "gain": 0.5, "role": "政策確認與落地提示" },
     "select": { "file": "ui-select.mp3", "loop": false, "gain": 0.4, "role": "選取街區的 UI 點擊聲" },
     "success": { "file": "success.mp3", "loop": false, "gain": 0.6, "role": "任務達成" },
     "failure": { "file": "failure.mp3", "loop": false, "gain": 0.6, "role": "任務失敗" },

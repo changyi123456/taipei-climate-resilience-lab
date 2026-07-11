@@ -1,5 +1,7 @@
 # 遊戲物件美術掃描報告（climate-resilience-lab）
 
+> 歷史掃描：其中的地格建造建議已停止採用。現行 3D 地表物件只作為政策落地後的視覺回饋。
+
 掃描範圍：`CityWorld.ts`（~1900 行渲染層）、`cityWorldHelpers.ts`、後製管線。
 評估鏡頭：physics-rpg-3d skill 的 3D 視覺準則（發光材質、燈光分層、世界內文字、低環境光+焦點色光），改編適用於 vanilla Three.js。
 

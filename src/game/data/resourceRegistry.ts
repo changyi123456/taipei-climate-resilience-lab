@@ -53,32 +53,24 @@ export const API_RESOURCES: ExternalResource[] = [
     productionUse: 'Solar potential, precipitation, temperature, and renewable energy missions.'
   },
   {
-    name: 'World Bank Indicators API',
-    role: 'Population and development indicators.',
-    url: 'https://datahelpdesk.worldbank.org/knowledgebase/articles/889392',
-    licenseOrAccess: 'Free public API, no key.',
-    productionUse: 'Population, urbanization, energy access, GDP, education, and health context.'
+    name: '內政部戶政司人口統計（靜態內建）',
+    role: 'Taipei population context.',
+    url: 'https://www.ris.gov.tw/app/portal/346',
+    licenseOrAccess: 'Taiwan government open statistics; snapshot metadata must be dated.',
+    productionUse: '2024 year-end Taipei population baseline. World Bank does not provide TWN coverage.'
   },
   {
-    name: 'UNSD SDG API',
-    role: 'Official SDG metadata.',
-    url: 'https://unstats.un.org/SDGAPI/swagger/',
-    licenseOrAccess: 'Free public API.',
-    productionUse: 'SDG indicator labels, official framing, and report outputs.'
-  },
-  {
-    name: 'Open-Meteo Air Quality (CAMS)',
+    name: 'Open-Meteo 空氣品質（CAMS）',
     role: 'Air quality (PM2.5) without an API key.',
     url: 'https://open-meteo.com/en/docs/air-quality-api',
     licenseOrAccess: 'Free public API, no key. Data from Copernicus CAMS.',
     productionUse: 'Default real-time PM2.5 source feeding the US EPA AQI and air-risk model.'
   },
   {
-    name: 'OpenAQ (optional)',
+    name: 'OpenAQ（選用，需 API key）',
     role: 'Ground-station air quality observations.',
     url: 'https://docs.openaq.org/about/about',
     licenseOrAccess: 'Free account, API key required.',
     productionUse: 'Optional: when a key is supplied, station PM2.5 overrides the CAMS reanalysis. Keep key out of client code for production.'
   }
 ];
-

@@ -10,7 +10,7 @@ type WarmSeasonRange = {
   endYear: number;
 };
 
-const API_TIMEOUT_MS = 5500;
+const API_TIMEOUT_MS = 8000;
 const TEMPERATURE_RANGE = { min: -30, max: 55 };
 const PRECIPITATION_RANGE = { min: 0, max: 1000 };
 const SOLAR_RANGE = { min: 0, max: 12 };
@@ -30,24 +30,31 @@ const HEAVY_RAIN_MM_PER_DAY = 50;
 
 export async function fetchOpenMeteoSignals(coordinates: Coordinates): Promise<PartialSignals> {
   const seasonRange = getLatestCompleteWarmSeasonRange();
-  const seasons = await Promise.all(seasonRange.ranges.map((range) => fetchOpenMeteoSeason(coordinates, range)));
+  const seasonResults = await Promise.allSettled(
+    seasonRange.ranges.map((range) => fetchOpenMeteoSeason(coordinates, range))
+  );
+  const seasons = seasonResults
+    .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchOpenMeteoSeason>>> => result.status === 'fulfilled')
+    .map((result) => result.value);
+  if (seasons.length === 0) throw new Error('Open-Meteo warm-season history unavailable');
   const dailyMeanTemps = seasons.reduce<number[]>((values, season) => values.concat(season.dailyMeanTemps), []);
   const dailyMaxTemps = seasons.reduce<number[]>((values, season) => values.concat(season.dailyMaxTemps), []);
   const dailyMinTemps = seasons.reduce<number[]>((values, season) => values.concat(season.dailyMinTemps), []);
   const dailyRain = seasons.reduce<number[]>((values, season) => values.concat(season.dailyRain), []);
 
   const meanTemperatureC = average(dailyMeanTemps, 28, TEMPERATURE_RANGE);
-  const heatwaveDaysPerSeason = countDaysAtOrAbove(dailyMaxTemps, HEATWAVE_MAX_TEMP_C, TEMPERATURE_RANGE) / seasonRange.years;
+  const yearsLoaded = seasons.length;
+  const heatwaveDaysPerSeason = countDaysAtOrAbove(dailyMaxTemps, HEATWAVE_MAX_TEMP_C, TEMPERATURE_RANGE) / yearsLoaded;
   const tropicalNightsPerSeason =
-    countDaysAtOrAbove(dailyMinTemps, TROPICAL_NIGHT_MIN_TEMP_C, TEMPERATURE_RANGE) / seasonRange.years;
+    countDaysAtOrAbove(dailyMinTemps, TROPICAL_NIGHT_MIN_TEMP_C, TEMPERATURE_RANGE) / yearsLoaded;
   const heavyRainDaysPerSeason =
-    countDaysAtOrAbove(dailyRain, HEAVY_RAIN_MM_PER_DAY, PRECIPITATION_RANGE) / seasonRange.years;
+    countDaysAtOrAbove(dailyRain, HEAVY_RAIN_MM_PER_DAY, PRECIPITATION_RANGE) / yearsLoaded;
   const seasonalRainTotal = sum(
     dailyRain,
-    WARM_SEASON_BASELINE_MONTHLY_RAIN_MM * WARM_SEASON_MONTHS * seasonRange.years,
+    WARM_SEASON_BASELINE_MONTHLY_RAIN_MM * WARM_SEASON_MONTHS * yearsLoaded,
     PRECIPITATION_RANGE
   );
-  const monthlyPrecipitationMm = clamp(seasonalRainTotal / (seasonRange.years * WARM_SEASON_MONTHS), 0, 1500);
+  const monthlyPrecipitationMm = clamp(seasonalRainTotal / (yearsLoaded * WARM_SEASON_MONTHS), 0, 1500);
   const precipitationAnomalyRatio = clamp(
     monthlyPrecipitationMm / WARM_SEASON_BASELINE_MONTHLY_RAIN_MM * 0.62 +
       heavyRainDaysPerSeason / WARM_SEASON_BASELINE_HEAVY_RAIN_DAYS * 0.38,
@@ -68,7 +75,13 @@ export async function fetchOpenMeteoSignals(coordinates: Coordinates): Promise<P
 
 export async function fetchNasaPowerSignals(coordinates: Coordinates): Promise<PartialSignals> {
   const seasonRange = getLatestCompleteWarmSeasonRange();
-  const seasons = await Promise.all(seasonRange.ranges.map((range) => fetchNasaPowerSeason(coordinates, range)));
+  const seasonResults = await Promise.allSettled(
+    seasonRange.ranges.map((range) => fetchNasaPowerSeason(coordinates, range))
+  );
+  const seasons = seasonResults
+    .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchNasaPowerSeason>>> => result.status === 'fulfilled')
+    .map((result) => result.value);
+  if (seasons.length === 0) throw new Error('NASA POWER warm-season history unavailable');
   const temp = seasons.reduce<number[]>((values, season) => values.concat(season.temp), []);
   const precipitation = seasons.reduce<number[]>((values, season) => values.concat(season.precipitation), []);
   const solar = seasons.reduce<number[]>((values, season) => values.concat(season.solar), []);
@@ -79,7 +92,7 @@ export async function fetchNasaPowerSignals(coordinates: Coordinates): Promise<P
 
   if (meanTemperatureC !== undefined) signals.meanTemperatureC = meanTemperatureC;
   if (precipitationTotal !== undefined) {
-    signals.monthlyPrecipitationMm = clamp(precipitationTotal / (seasonRange.years * WARM_SEASON_MONTHS), 0, 1500);
+    signals.monthlyPrecipitationMm = clamp(precipitationTotal / (seasons.length * WARM_SEASON_MONTHS), 0, 1500);
   }
   if (solarKwhM2Day !== undefined) signals.solarKwhM2Day = solarKwhM2Day;
 

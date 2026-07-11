@@ -41,6 +41,15 @@ function getDataLayerValue(district: DistrictState, layer: DataLayerId): number 
   }
 }
 
+const SCIENCE_COLOR_STOPS = [0x440154, 0x3b528b, 0x21918c, 0x5ec962, 0xfde725] as const;
+
+/** Viridis 類色階：亮度單調、色覺缺陷下仍較容易判讀。 */
+function getScienceColor(value: number): number {
+  const scaled = clamp(value, 0, 1) * (SCIENCE_COLOR_STOPS.length - 1);
+  const index = Math.min(SCIENCE_COLOR_STOPS.length - 2, Math.floor(scaled));
+  return mixColorHex(SCIENCE_COLOR_STOPS[index], SCIENCE_COLOR_STOPS[index + 1], scaled - index);
+}
+
 interface DistrictVisual {
   root: THREE.Group;
   base: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
@@ -115,6 +124,7 @@ export class CityWorld {
   /** 地格轉換閃光：tile → 起始秒數。 */
   private readonly tileFlashes = new Map<THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>, number>();
   private readonly prevCellsKeys = new Map<string, string>();
+  private readonly timers: number[] = [];
 
   constructor(scene: THREE.Scene, state: CityState) {
     this.scene = scene;
@@ -212,10 +222,10 @@ export class CityWorld {
 
       const layerValue = getDataLayerValue(district, this.dataLayerId);
       if (layerValue !== undefined) {
-        // 圖層模式：藍（低）→ 黃 → 紅（高）的科學色階，方便跨街區比較。
-        visual.base.material.color.setHSL(0.62 - layerValue * 0.62, 0.78, 0.34 + layerValue * 0.14);
-        visual.base.material.emissive.setHSL(0.62 - layerValue * 0.62, 0.7, 0.1);
-        visual.base.material.emissiveIntensity = 0.35 + layerValue * 0.4;
+        const scienceColor = getScienceColor(layerValue);
+        visual.base.material.color.setHex(scienceColor);
+        visual.base.material.emissive.setHex(scienceColor);
+        visual.base.material.emissiveIntensity = 0.12 + layerValue * 0.2;
       } else {
         const risk = Math.max(district.heatExposure, district.floodExposure, district.airPollution);
         const stressColor = mixColorHex(getDistrictBaseColor(district), 0xc86a46, clamp((risk - 42) / 120, 0, 0.38));
@@ -289,11 +299,37 @@ export class CityWorld {
       .reverse();
 
     policiesThisTurn.forEach((entry, index) => {
-      window.setTimeout(() => this.triggerPolicyFx(entry, state), 260 + index * 720);
+      this.schedule(() => this.triggerPolicyFx(entry, state), 260 + index * 720);
     });
 
     const hazardDelay = Math.max(1200, 680 + policiesThisTurn.length * 720);
-    window.setTimeout(() => this.triggerHazardFx(state.currentChallenge.soundCue), hazardDelay);
+    this.schedule(() => this.triggerHazardFx(state.currentChallenge.soundCue), hazardDelay);
+  }
+
+  dispose(): void {
+    this.timers.forEach((timer) => window.clearTimeout(timer));
+    this.timers.length = 0;
+    this.root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      mesh.geometry?.dispose?.();
+      const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      materials.forEach((material) => {
+        const mapped = material as THREE.Material & { map?: THREE.Texture };
+        mapped.map?.dispose();
+        material.dispose();
+      });
+    });
+    this.scene.remove(this.root);
+    this.pickables.length = 0;
+  }
+
+  private schedule(callback: () => void, delay: number): void {
+    const timer = window.setTimeout(() => {
+      const index = this.timers.indexOf(timer);
+      if (index >= 0) this.timers.splice(index, 1);
+      callback();
+    }, delay);
+    this.timers.push(timer);
   }
 
   tick(elapsedSeconds: number): void {
@@ -335,18 +371,6 @@ export class CityWorld {
     this.eventHalo.material.opacity = 0.045 + shimmer * 0.028 + this.eventPulse * 0.16;
     this.eventHalo.scale.setScalar(1 + shimmer * 0.05 + this.eventPulse * 0.34);
     this.eventPulse = Math.max(0, this.eventPulse - 0.018);
-  }
-
-  /** 拾取結果若是地格磚，回傳街區 + 地格索引（建造模式用）。 */
-  findCellTarget(object: THREE.Object3D | null): { districtId: string; cellIndex: number } | undefined {
-    let current: THREE.Object3D | null = object;
-    while (current) {
-      if (typeof current.userData.cellIndex === 'number' && typeof current.userData.districtId === 'string') {
-        return { districtId: current.userData.districtId, cellIndex: current.userData.cellIndex };
-      }
-      current = current.parent;
-    }
-    return undefined;
   }
 
   findDistrictId(object: THREE.Object3D | null): string | undefined {
@@ -607,7 +631,7 @@ export class CityWorld {
     root.add(base);
     this.pickables.push(base);
 
-    // P2 格網建造：4×4 地格磚（土地利用視圖 + 點擊建造的拾取目標）
+    // 4×4 地表格網用來呈現政策落地後的土地利用變化；玩家不直接編輯地格。
     const cellTiles: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>[] = [];
     const tileSize = 5.2 / CELL_GRID_SIZE;
     for (let cellIndex = 0; cellIndex < CELL_GRID_SIZE * CELL_GRID_SIZE; cellIndex += 1) {
@@ -630,10 +654,8 @@ export class CityWorld {
         (row - (CELL_GRID_SIZE - 1) / 2) * tileSize
       );
       tile.userData.districtId = district.id;
-      tile.userData.cellIndex = cellIndex;
       tile.renderOrder = 2;
       root.add(tile);
-      this.pickables.push(tile);
       cellTiles.push(tile);
     }
 

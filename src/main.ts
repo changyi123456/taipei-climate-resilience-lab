@@ -1,62 +1,24 @@
 import './styles.css';
 import { createGameAudio } from './audio/gameAudio';
 import { createInitialCityState } from './game/content/cityScenario';
+import { getChallengeForMissionTurn } from './game/content/cityScenario';
 import { getClimateDataBundle } from './game/data/climateDataService';
 import type { ClimateDataSourceStatus } from './game/data/climateDataService';
-import { createCampaignMission } from './game/content/missions';
+import { CAMPAIGN_LENGTH, createCampaignMission, createSandboxMission } from './game/content/missions';
 import {
   advanceYear,
   applyPolicyToState,
   recalculateCityMetrics,
   replaceClimateSignals,
-  startMission
+  startMission,
+  toggleEvidenceSelection
 } from './game/simulation/advanceTurn';
 import type { CityState } from './game/simulation/types';
+import { clearSave, loadGame, saveGame } from './game/save/saveGame';
 import type { SspScenarioId } from './game/simulation/scenarios';
 import { createGameApp } from './render/app/createGameApp';
 import type { DataLayerId } from './render/objects/CityWorld';
 import { createHud } from './ui/hud/createHud';
-
-const SAVE_KEY = 'climate-resilience-lab/save/v1';
-
-/** 自動存檔：state 為純資料物件，可直接序列化。 */
-function saveGame(state: CityState): void {
-  try {
-    window.localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-  } catch {
-    /* 私密模式或容量不足時靜默略過 */
-  }
-}
-
-function loadGame(): CityState | undefined {
-  try {
-    const raw = window.localStorage.getItem(SAVE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as CityState;
-    // 舊版存檔缺少新欄位時視為無效（避免半套狀態）。
-    if (
-      typeof parsed.seed !== 'number' ||
-      !parsed.scenario ||
-      !Array.isArray(parsed.evidenceLog) ||
-      !parsed.mode ||
-      typeof parsed.missionIndex !== 'number' ||
-      !Array.isArray(parsed.districts?.[0]?.cells)
-    ) {
-      return undefined;
-    }
-    return parsed;
-  } catch {
-    return undefined;
-  }
-}
-
-function clearSave(): void {
-  try {
-    window.localStorage.removeItem(SAVE_KEY);
-  } catch {
-    /* noop */
-  }
-}
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
 const hudRoot = document.querySelector<HTMLElement>('#hud-root');
@@ -66,7 +28,7 @@ if (!canvas || !hudRoot) {
 }
 
 const savedState = loadGame();
-let state: CityState = savedState ?? recalculateCityMetrics(createInitialCityState());
+let state: CityState = recalculateCityMetrics(savedState ?? createInitialCityState());
 let audioEnabled = false;
 let dataLayer: DataLayerId = 'none';
 let yearProcessing = false;
@@ -74,6 +36,9 @@ let dataLoadStatus: DataLoadStatus = 'idle';
 let dataLoadError: string | undefined;
 let dataTutorialOpen = false;
 let dataSourceStatuses: ClimateDataSourceStatus[] = [];
+let transitionTimer = 0;
+let transitionToken = 0;
+let pendingYearState: CityState | undefined;
 
 const YEAR_TRANSITION_MS = 5000;
 
@@ -121,24 +86,17 @@ const hud = createHud(hudRoot, {
     }
 
     yearProcessing = true;
+    const token = ++transitionToken;
+    pendingYearState = next;
     app.playYearTransition(before);
     playYearTransitionAudio(before);
     hud.render();
 
-    window.setTimeout(() => {
-      yearProcessing = false;
-
-      if (audioEnabled && next.lastResolution) {
-        audio.startAmbience(next.currentChallenge.soundCue);
-      }
-
-      if (audioEnabled && before.mission.status !== next.mission.status) {
-        if (next.mission.status === 'won') audio.playSuccess();
-        if (next.mission.status === 'lost') audio.playFailure();
-      }
-
-      setState(next);
-    }, YEAR_TRANSITION_MS);
+    transitionTimer = window.setTimeout(() => finishYearTransition(before, token), YEAR_TRANSITION_MS);
+  },
+  onSkipYearTransition: () => {
+    if (!yearProcessing) return;
+    finishYearTransition(state, transitionToken);
   },
   onSelectDistrict: (districtId) => selectDistrict(districtId),
   onResetMission: () => resetMission(),
@@ -173,6 +131,12 @@ const hud = createHud(hudRoot, {
     if (audioEnabled) audio.playSelect();
     setState({ ...state, scenario });
   },
+  onToggleEvidence: (evidenceId) => setState(toggleEvidenceSelection(state, evidenceId)),
+  getQualityTier: () => app.getQuality(),
+  onToggleQuality: () => {
+    app.setQuality(app.getQuality() === 'high' ? 'low' : 'high');
+    hud.render();
+  },
   onRestartGame: () => {
     if (!window.confirm('確定要重新開始嗎？目前的城市進度與存檔將被清除。')) return;
     dataLayer = 'none';
@@ -181,29 +145,89 @@ const hud = createHud(hudRoot, {
   },
   onSelectMission: (index) => {
     if (state.mission.status !== 'briefing') return;
+    if (index > state.unlockedMissionIndex) return;
     if (audioEnabled) audio.playSelect();
+    const mission = createCampaignMission(state.seed, index, state.turn);
     setState({
       ...state,
       missionIndex: index,
-      mission: createCampaignMission(state.seed, index)
+      mission,
+      selectedEvidenceIds: [],
+      currentChallenge: getChallengeForMissionTurn(mission.id, state.seed, state.turn)
     });
   },
   onBackToMissionSelect: () => {
-    // 結算後返回副本選單：城市重置（保留 seed 與情境），任務回到簡報待選狀態。
     if (audioEnabled) audio.playSelect();
-    const base = recalculateCityMetrics(
-      createInitialCityState(undefined, { seed: state.seed, scenario: state.scenario })
-    );
-    setState({
-      ...base,
-      missionIndex: state.missionIndex,
-      mission: createCampaignMission(base.seed, state.missionIndex)
-    });
+    if (state.mission.status === 'won' && state.missionIndex >= CAMPAIGN_LENGTH - 1) {
+      const mission = createSandboxMission(state.turn);
+      setState({
+        ...state,
+        mode: 'sandbox',
+        phase: 'planning',
+        mission,
+        lastResolution: undefined,
+        selectedEvidenceIds: [],
+        turnPressure: {},
+        currentChallenge: getChallengeForMissionTurn(mission.id, state.seed, state.turn)
+      });
+      return;
+    }
+
+    if (state.mission.status === 'won') {
+      const nextIndex = Math.min(CAMPAIGN_LENGTH - 1, state.missionIndex + 1);
+      const mission = createCampaignMission(state.seed, nextIndex, state.turn);
+      setState(recalculateCityMetrics({
+        ...state,
+        missionIndex: nextIndex,
+        mission,
+        phase: 'planning',
+        budget: state.budget + 22,
+        lastResolution: undefined,
+        selectedEvidenceIds: [],
+        turnPressure: {},
+        currentChallenge: getChallengeForMissionTurn(mission.id, state.seed, state.turn),
+        eventLog: [`戰役推進至${mission.chapter}：市議會核撥 22 百萬章節預算。`, ...state.eventLog].slice(0, 10)
+      }));
+      return;
+    }
+
+    retryCurrentMission();
   }
 });
 
 hud.render();
 app.start();
+window.addEventListener('beforeunload', () => {
+  cancelYearTransition();
+  hud.dispose();
+  app.dispose();
+  audio.dispose();
+}, { once: true });
+
+function finishYearTransition(before: CityState, token: number): void {
+  if (!yearProcessing || token !== transitionToken || !pendingYearState) return;
+  window.clearTimeout(transitionTimer);
+  const next = {
+    ...pendingYearState,
+    selectedDistrictId: state.selectedDistrictId
+  };
+  pendingYearState = undefined;
+  yearProcessing = false;
+
+  if (audioEnabled && next.lastResolution) audio.startAmbience(next.currentChallenge.soundCue);
+  if (audioEnabled && before.mission.status !== next.mission.status) {
+    if (next.mission.status === 'won') audio.playSuccess();
+    if (next.mission.status === 'lost') audio.playFailure();
+  }
+  setState(next);
+}
+
+function cancelYearTransition(): void {
+  transitionToken += 1;
+  window.clearTimeout(transitionTimer);
+  pendingYearState = undefined;
+  yearProcessing = false;
+}
 
 async function loadLiveData(): Promise<void> {
   if (dataLoadStatus === 'loading') return;
@@ -256,7 +280,7 @@ function selectDistrict(districtId: string): void {
 
 function resetMission(): void {
   clearSave();
-  yearProcessing = false;
+  cancelYearTransition();
   dataLoadStatus = 'idle';
   dataLoadError = undefined;
   dataTutorialOpen = false;
@@ -267,6 +291,22 @@ function resetMission(): void {
     audio.playEvent('civic');
   }
   setState(next);
+}
+
+function retryCurrentMission(): void {
+  cancelYearTransition();
+  const base = recalculateCityMetrics(
+    createInitialCityState(undefined, { seed: state.seed, scenario: state.scenario })
+  );
+  const mission = createCampaignMission(base.seed, state.missionIndex, base.turn);
+  setState({
+    ...base,
+    missionIndex: state.missionIndex,
+    unlockedMissionIndex: state.unlockedMissionIndex,
+    completedMissionIds: [...state.completedMissionIds],
+    mission,
+    currentChallenge: getChallengeForMissionTurn(mission.id, base.seed, base.turn)
+  });
 }
 
 function toggleAudio(): void {

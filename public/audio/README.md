@@ -14,7 +14,7 @@
 |---|---|---|
 | `city-ambience.mp3` | 背景城市噪音（循環） | city ambience loop / urban traffic loop |
 | `cash-register.mp3` | 政策花錢聲 | cash register / coins / kaching |
-| `policy-confirm.mp3` | 政策確認 | UI confirm / build complete |
+| `policy-confirm.mp3` | 政策確認 | UI confirm / policy applied |
 | `ui-select.mp3` | 選街區點擊 | UI click / select |
 | `success.mp3` / `failure.mp3` | 任務成敗 | success jingle / fail |
 | `hazard-heat.mp3` | 熱浪（蟬鳴／熱風） | cicada / hot wind / heat |

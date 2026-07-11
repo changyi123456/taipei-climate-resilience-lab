@@ -343,7 +343,7 @@ export function dataSourceRows(sourceStatuses: ClimateDataSourceStatus[]): strin
     }),
     {
       name: '台北本地基準補值',
-      url: '/data/taipei-climate-baseline.json',
+      url: `${import.meta.env.BASE_URL}data/taipei-climate-baseline.json`,
       status: statusByName.get('台北本地基準補值'),
       pulledData: '作為教室離線或 API 缺項時的台北基準補值，避免單一資料源失效讓課程中斷。',
       studentNote: '不是玩家可切換的假資料；它用來補足缺漏欄位，讓同一套任務仍能討論資料不確定性。'
@@ -390,13 +390,9 @@ export function dataSourceTeaching(name: string): { pulledData: string; studentN
       pulledData: '同一段近 5 個完整暖季的每日太陽輻射，補強能源與太陽能潛力判讀。',
       studentNote: '用來討論為什麼屋頂太陽能、能源韌性與極端高溫會被放進同一個城市決策。'
     },
-    'World Bank Indicators API': {
-      pulledData: '國家尺度人口與都市人口比例，作為城市暴露人口與都市化背景。',
-      studentNote: '不是街區人口普查，而是宏觀背景；學生要理解尺度不同時，資料解釋也會不同。'
-    },
-    'UNSD SDG API': {
-      pulledData: '永續發展目標的官方指標語彙與分類，對應政策卡上的 SDG 學習框架。',
-      studentNote: '它不直接改變熱風險或洪水風險，而是協助把政策效果連到 SDG 3、6、7、11、13 等目標。'
+    '內政部戶政司人口統計（靜態內建）': {
+      pulledData: '臺北市 2024 年底人口統計快照，作為城市暴露人口的背景尺度。',
+      studentNote: '這不是街區人口普查；畫面會清楚標示年份，避免把靜態快照誤認成即時人口。'
     },
     'Open-Meteo 空氣品質（CAMS）': {
       pulledData: '近 7 天的逐時 PM2.5（哥白尼大氣監測 CAMS 全球/歐洲再分析），平均後作為當前空污輸入。',

@@ -39,7 +39,7 @@ const HEATWAVE_VARIANTS: HeatwaveMissionVariant[] = [
   }
 ];
 
-export function createHeatwaveMission(_seed: number): MissionState {
+export function createHeatwaveMission(_seed: number, startTurn = 1): MissionState {
   const variant = HEATWAVE_VARIANTS[0];
 
   return {
@@ -52,7 +52,11 @@ export function createHeatwaveMission(_seed: number): MissionState {
       '你扮演城市韌性小組，必須在有限預算與有限行政量能下保護居民。成功不是把所有政策買完，而是用證據判斷哪個區域最需要哪種介入。',
     turnLimit: 4,
     policyLimitPerTurn: variant.policyLimitPerTurn,
+    startTurn,
     status: 'briefing',
+    advisorName: '林以晴醫師',
+    advisorRole: '公共衛生與熱傷害顧問',
+    advisorMessage: '平均值會掩蓋風險。先找出熱、人口與降溫可近性同時不利的街區。',
     objectives: buildHeatwaveObjectives(variant).map((objective) => ({
       ...objective,
       current: 0,
@@ -81,6 +85,9 @@ interface CampaignChapter {
   title: string;
   briefing: string;
   stakes: string;
+  advisorName: string;
+  advisorRole: string;
+  advisorMessage: string;
   objectives: MissionObjectiveDefinition[];
 }
 
@@ -92,6 +99,9 @@ const CAMPAIGN_CHAPTERS: CampaignChapter[] = [
     title: '熱浪警戒',
     briefing: '',
     stakes: '',
+    advisorName: '林以晴醫師',
+    advisorRole: '公共衛生與熱傷害顧問',
+    advisorMessage: '平均值會掩蓋風險。先找出熱、人口與降溫可近性同時不利的街區。',
     objectives: []
   },
   {
@@ -100,12 +110,16 @@ const CAMPAIGN_CHAPTERS: CampaignChapter[] = [
     title: '颱風洪峰：海綿城市考驗',
     briefing:
       '颱風季來臨，外圍環流的短延時強降雨將考驗排水系統。河岸與海港低窪區的逕流係數是關鍵——觀察「逕流」圖層，把透水設施放在最需要的地方。',
-    stakes: '上一章的降溫投資仍然有效，但這一章雨水不會等你。每回合最多 2 項政策，也可直接在地格上建造透水鋪面與滯洪水體。',
+    stakes: '上一章的降溫投資仍然有效，但這一章雨水不會等你。每回合最多審議 2 項政策，必須在防洪效益、預算與公平之間取捨。',
+    advisorName: '陳維港工程師',
+    advisorRole: '都市水文與防災顧問',
+    advisorMessage: '不要只看總雨量。低窪地、不透水面與防洪缺口重疊的地方，才是洪峰會先擊中的地方。',
     objectives: [
       { id: 'lower-flood', label: '洪水風險 <= 56', metric: 'floodRisk', comparator: '<=', target: 56, helper: '洪水風險由極端降雨（Hazard）×逕流（地表）×防洪設施（Vulnerability）組成。' },
       { id: 'protect-health-2', label: '公共健康 >= 64', metric: 'publicHealth', comparator: '>=', target: 64, helper: '淹水會直接衝擊健康（傷亡、傳染病、心理壓力）。' },
       { id: 'keep-trust', label: '公眾信任 >= 58', metric: 'publicTrust', comparator: '>=', target: 58, helper: '防災溝通與透明決策維持市民信任。' },
-      { id: 'keep-budget-2', label: '剩餘預算 >= 10', metric: 'budget', comparator: '>=', target: 10, unit: ' 百萬', helper: '颱風季後還需要修復預算。' }
+      { id: 'keep-budget-2', label: '剩餘預算 >= 10', metric: 'budget', comparator: '>=', target: 10, unit: ' 百萬', helper: '颱風季後還需要修復預算。' },
+      { id: 'evidence-2', label: '選入 CER 證據 >= 2', metric: 'selectedEvidence', comparator: '>=', target: 2, helper: '從證據抽屜挑出至少兩筆資料，支持你的防洪主張。' }
     ]
   },
   {
@@ -115,11 +129,15 @@ const CAMPAIGN_CHAPTERS: CampaignChapter[] = [
     briefing:
       '秋冬靜風期讓 PM2.5 不易擴散，工業區與交通幹道周邊暴露上升。切換「空污」圖層找出熱點，用排放管制、綠運輸與綠帶吸附多管齊下。',
     stakes: 'AQI 已對齊 EPA 官方類別——讓城市離開橘色（對敏感族群不健康）區間。',
+    advisorName: '周若岑老師',
+    advisorRole: '環境正義與公民科學顧問',
+    advisorMessage: '同一個 AQI 不代表每個人承受相同風險。請把污染源、人口與健康脆弱度放在同一張圖上。',
     objectives: [
       { id: 'lower-air', label: '空氣風險 <= 38', metric: 'airQualityRisk', comparator: '<=', target: 38, helper: '空氣風險由區域 AQI 基準與街區排放源組成。' },
       { id: 'protect-health-3', label: '公共健康 >= 67', metric: 'publicHealth', comparator: '>=', target: 67, helper: 'PM2.5 與呼吸道、心血管疾病有明確的劑量反應關係。' },
       { id: 'lower-emissions', label: '排放 <= 62', metric: 'emissions', comparator: '<=', target: 62, helper: '管制本地排放同時改善空品與碳排。' },
-      { id: 'keep-budget-3', label: '剩餘預算 >= 8', metric: 'budget', comparator: '>=', target: 8, unit: ' 百萬', helper: '保留下一章能源轉型的本錢。' }
+      { id: 'keep-budget-3', label: '剩餘預算 >= 8', metric: 'budget', comparator: '>=', target: 8, unit: ' 百萬', helper: '保留下一章能源轉型的本錢。' },
+      { id: 'evidence-3', label: '選入 CER 證據 >= 2', metric: 'selectedEvidence', comparator: '>=', target: 2, helper: '選擇能說明污染暴露與政策效果的證據。' }
     ]
   },
   {
@@ -127,20 +145,24 @@ const CAMPAIGN_CHAPTERS: CampaignChapter[] = [
     chapter: '第 4 章',
     title: '能源轉型：尖峰與淨零',
     briefing:
-      '連年熱浪推升冷氣用電，電網逼近極限。鋪設太陽能（地格建造或政策）、強化綠運輸，在不犧牲健康的前提下完成能源轉型。',
+      '連年熱浪推升冷氣用電，電網逼近極限。比較屋頂太陽能、綠運輸與需求管理政策，在不犧牲健康的前提下完成能源轉型。',
     stakes: '最終章：調適與減緩必須同時成立。完成後城市進入自由沙盒。',
+    advisorName: '許安哲研究員',
+    advisorRole: '能源系統與轉型正義顧問',
+    advisorMessage: '太陽能、儲能與需求管理必須一起看；也別讓轉型成本只落在最弱勢的居民身上。',
     objectives: [
       { id: 'energy-secure', label: '能源安全 >= 68', metric: 'energySecurity', comparator: '>=', target: 68, helper: '分散式太陽能降低尖峰時段的電網壓力。' },
       { id: 'deep-cut', label: '排放 <= 52', metric: 'emissions', comparator: '<=', target: 52, helper: '淨零路徑需要運輸、產業、能源同時減排。' },
       { id: 'protect-health-4', label: '公共健康 >= 68', metric: 'publicHealth', comparator: '>=', target: 68, helper: '能源轉型不能以健康為代價。' },
-      { id: 'keep-trust-4', label: '公眾信任 >= 60', metric: 'publicTrust', comparator: '>=', target: 60, helper: '轉型正義：讓市民理解並支持轉型的代價與效益。' }
+      { id: 'keep-trust-4', label: '公眾信任 >= 60', metric: 'publicTrust', comparator: '>=', target: 60, helper: '轉型正義：讓市民理解並支持轉型的代價與效益。' },
+      { id: 'evidence-4', label: '選入 CER 證據 >= 2', metric: 'selectedEvidence', comparator: '>=', target: 2, helper: '用兩筆以上證據說明調適與減緩如何同時成立。' }
     ]
   }
 ];
 
 /** 建立第 index 個副本任務（index 0 = 熱浪）。 */
-export function createCampaignMission(seed: number, index: number): MissionState {
-  if (index <= 0) return createHeatwaveMission(seed);
+export function createCampaignMission(seed: number, index: number, startTurn = 1): MissionState {
+  if (index <= 0) return createHeatwaveMission(seed, startTurn);
 
   const chapter = CAMPAIGN_CHAPTERS[Math.min(index, CAMPAIGN_CHAPTERS.length - 1)];
   return {
@@ -151,8 +173,30 @@ export function createCampaignMission(seed: number, index: number): MissionState
     stakes: chapter.stakes,
     turnLimit: 4,
     policyLimitPerTurn: 2,
+    startTurn,
     status: 'briefing',
+    advisorName: chapter.advisorName,
+    advisorRole: chapter.advisorRole,
+    advisorMessage: chapter.advisorMessage,
     objectives: chapter.objectives.map((objective) => ({ ...objective, current: 0, passed: false }))
+  };
+}
+
+export function createSandboxMission(startTurn: number): MissionState {
+  return {
+    id: 'resilience-sandbox',
+    chapter: '自由沙盒',
+    title: '台北韌性長期實驗',
+    briefing: '四章任務已完成。現在可以自由測試政策組合，並觀察不同 SSP 情境下的長期變化。',
+    stakes: '沙盒沒有勝敗，但預算、年度事件與科學模型仍然有效。',
+    turnLimit: 999,
+    policyLimitPerTurn: 3,
+    startTurn,
+    status: 'active',
+    objectives: [],
+    advisorName: '城市科學委員會',
+    advisorRole: '跨領域研究團隊',
+    advisorMessage: '把每次改造視為實驗：先提出假設，再用圖層與 CER 證據檢查結果。'
   };
 }
 
@@ -181,7 +225,7 @@ export function updateMissionProgress(
   const mission = state.mission;
   const objectives = mission.objectives.map((objective) => evaluateObjective(state, objective));
   const allPassed = objectives.every((objective) => objective.passed);
-  const outOfTime = state.turn > mission.turnLimit;
+  const outOfTime = state.turn - mission.startTurn >= mission.turnLimit;
 
   let status = mission.status;
   let phase = state.phase;
@@ -206,9 +250,17 @@ export function updateMissionProgress(
     debriefBody = buildFailureDebrief(objectives);
   }
 
+  const completedMissionIds =
+    status === 'won' && !state.completedMissionIds.includes(mission.id)
+      ? [...state.completedMissionIds, mission.id]
+      : state.completedMissionIds;
+
   return {
     ...state,
     phase,
+    completedMissionIds,
+    unlockedMissionIndex:
+      status === 'won' ? Math.min(CAMPAIGN_LENGTH - 1, Math.max(state.unlockedMissionIndex, state.missionIndex + 1)) : state.unlockedMissionIndex,
     mission: {
       ...mission,
       status,
@@ -220,7 +272,7 @@ export function updateMissionProgress(
 }
 
 export function getTurnsRemaining(state: CityState): number {
-  return Math.max(0, state.mission.turnLimit - state.turn + 1);
+  return Math.max(0, state.mission.turnLimit - (state.turn - state.mission.startTurn));
 }
 
 function buildHeatwaveObjectives(variant: HeatwaveMissionVariant): MissionObjectiveDefinition[] {
@@ -265,6 +317,14 @@ function buildHeatwaveObjectives(variant: HeatwaveMissionVariant): MissionObject
       target: variant.budgetTarget,
       unit: ' 百萬',
       helper: '保留預算代表城市還能面對下一次災害或維護支出。'
+    },
+    {
+      id: 'evidence-heat',
+      label: '選入 CER 證據 >= 2',
+      metric: 'selectedEvidence',
+      comparator: '>=',
+      target: 2,
+      helper: '從證據抽屜挑出至少兩筆資料，支持你的降溫與公平主張。'
     }
   ];
 }
@@ -287,8 +347,11 @@ function getObjectiveValue(state: CityState, metric: MissionObjectiveMetric): nu
   if (metric === 'budget') return state.budget;
   if (metric === 'turn') return state.turn;
   if (metric === 'coolingInterventions') {
-    return state.appliedPolicies.filter((entry) => HEAT_PROTECTION_POLICY_IDS.has(entry.policyId)).length;
+    return state.appliedPolicies.filter(
+      (entry) => entry.missionId === state.mission.id && HEAT_PROTECTION_POLICY_IDS.has(entry.policyId)
+    ).length;
   }
+  if (metric === 'selectedEvidence') return state.selectedEvidenceIds.length;
 
   return state[metric];
 }

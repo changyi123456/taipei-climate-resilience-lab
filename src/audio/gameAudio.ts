@@ -20,6 +20,7 @@ export interface GameAudio {
   playSuccess: () => void;
   playFailure: () => void;
   setMuted: (muted: boolean) => void;
+  dispose: () => void;
 }
 
 export function createGameAudio(): GameAudio {
@@ -72,7 +73,7 @@ class ProceduralGameAudio implements GameAudio {
 
   private async loadManifest(): Promise<void> {
     try {
-      const res = await fetch('/audio/manifest.json', { cache: 'no-cache' });
+      const res = await fetch(`${import.meta.env.BASE_URL}audio/manifest.json`, { cache: 'no-cache' });
       if (!res.ok) return;
       const data = await res.json();
       this.sampleSpecs = (data?.samples ?? {}) as Record<string, SampleSpec>;
@@ -86,7 +87,7 @@ class ProceduralGameAudio implements GameAudio {
     const spec = this.sampleSpecs[name];
     if (!spec) return undefined;
     try {
-      const res = await fetch(`/audio/${spec.file}`, { cache: 'force-cache' });
+      const res = await fetch(`${import.meta.env.BASE_URL}audio/${spec.file}`, { cache: 'force-cache' });
       if (!res.ok) return undefined;
       const arr = await res.arrayBuffer();
       const buffer = await this.ensureContext().decodeAudioData(arr);
@@ -288,6 +289,14 @@ class ProceduralGameAudio implements GameAudio {
     this.master!.gain.cancelScheduledValues(ctx.currentTime);
     this.master!.gain.setTargetAtTime(target, ctx.currentTime, 0.1);
     if (!muted) this.resume();
+  }
+
+  dispose(): void {
+    this.stopPadAndMelody();
+    this.ambienceBedSource?.stop();
+    this.ambienceBedSource = undefined;
+    if (this.context && this.context.state !== 'closed') void this.context.close();
+    this.context = undefined;
   }
 
   private ensureContext(): AudioContext {

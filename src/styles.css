@@ -1586,80 +1586,6 @@ button:disabled {
   }
 }
 
-/* ── P2 建造工具列 ─────────────────────────────────────────── */
-.build-bar {
-  position: absolute;
-  top: 126px;
-  left: 16px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  max-width: 620px;
-  pointer-events: auto;
-  z-index: 6;
-}
-
-.build-bar > span {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  opacity: 0.75;
-}
-
-.build-btn {
-  padding: 5px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 211, 226, 0.3);
-  background: rgba(8, 26, 34, 0.78);
-  color: #d7eef4;
-  font-size: 12px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.build-btn::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--cell-color, #888);
-}
-
-.build-btn small {
-  opacity: 0.65;
-  font-size: 10px;
-}
-
-.build-btn:hover {
-  border-color: rgba(148, 211, 226, 0.8);
-}
-
-.build-btn.active {
-  background: rgba(64, 170, 200, 0.85);
-  border-color: rgba(148, 226, 255, 0.95);
-  color: #05222c;
-  font-weight: 700;
-}
-
-.build-btn.cancel::before {
-  display: none;
-}
-
-.build-btn.cancel {
-  border-color: rgba(255, 140, 120, 0.6);
-  color: #ffc4b5;
-}
-
-.build-hint {
-  font-size: 11px;
-  font-style: normal;
-  opacity: 0.8;
-  color: #ffe2a6;
-}
-
 .layer-btn.restart {
   margin-left: 4px;
   border-color: rgba(255, 130, 110, 0.5);
@@ -1670,25 +1596,12 @@ button:disabled {
   border-color: rgba(255, 150, 130, 0.95);
 }
 
-/* ── 排版修正：工具列移到左下角，避免壓到頂部指標與任務面板 ── */
+/* ── 資料圖層列：左下角，不遮擋政策指令列 ── */
 .layer-bar {
   top: auto;
-  bottom: 72px;
+  bottom: 10px;
   left: 16px;
   right: auto;
-  max-width: min(660px, calc(100vw - 700px));
-  min-width: 320px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(6, 20, 27, 0.82);
-  border: 1px solid rgba(148, 211, 226, 0.16);
-  backdrop-filter: blur(6px);
-}
-
-.build-bar {
-  top: auto;
-  bottom: 14px;
-  left: 16px;
   max-width: min(660px, calc(100vw - 700px));
   min-width: 320px;
   padding: 8px 10px;
@@ -1712,17 +1625,9 @@ button:disabled {
 }
 
 @media (max-width: 1100px) {
-  .layer-bar,
-  .build-bar {
-    max-width: calc(100vw - 32px);
-  }
-
   .layer-bar {
-    bottom: 130px;
-  }
-
-  .build-bar {
-    bottom: 76px;
+    max-width: calc(100vw - 32px);
+    bottom: 78px;
   }
 }
 
@@ -1732,13 +1637,377 @@ button:disabled {
   }
 }
 
-/* 建造工具列已移除：圖層列貼齊左下角 */
+/* ── 2026 指揮桌改版：依完整遊戲 UI 概念統一資訊層級 ─────────── */
+:root {
+  --panel: rgba(7, 30, 38, 0.92);
+  --panel-strong: rgba(5, 24, 31, 0.97);
+  --line: rgba(126, 207, 211, 0.28);
+  --good: #72d39d;
+  --warn: #f0b84c;
+  --danger: #f0785f;
+  --blue: #62c6e7;
+}
+
+button,
+[role='button'] {
+  min-height: 40px;
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #f8d36b;
+  outline-offset: 3px;
+}
+
+.brand-lockup,
+.metric,
+.mission-chip,
+.year-feed,
+.district-chip-panel,
+.command-bar,
+.briefing-card,
+.guide-card,
+.policy-detail-card,
+.policy-board-panel {
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(16, 55, 65, 0.96), rgba(6, 28, 36, 0.97));
+  box-shadow: 0 12px 34px rgba(0, 7, 11, 0.32);
+  backdrop-filter: blur(8px);
+}
+
+.top-hud {
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  align-items: stretch;
+}
+
+.brand-lockup {
+  min-width: 300px;
+  border-left: 4px solid var(--good);
+}
+
+.brand-lockup > div {
+  min-width: 0;
+}
+
+.metric {
+  min-width: 96px;
+  border-bottom: 3px solid rgba(98, 198, 231, 0.38);
+}
+
+.mission-chip {
+  top: 94px;
+  left: 10px;
+  width: 306px;
+  max-height: calc(100vh - 245px);
+  border-top: 3px solid var(--blue);
+}
+
+.year-feed {
+  top: 94px;
+  left: 328px;
+  width: min(430px, calc(100vw - 670px));
+}
+
+.district-chip-panel {
+  top: 94px;
+  right: 10px;
+  width: 306px;
+  max-height: calc(100vh - 245px);
+  overflow: auto;
+  border-top: 3px solid var(--good);
+}
+
+.advisor-brief {
+  margin-top: 12px;
+  padding: 12px;
+  border-left: 3px solid var(--blue);
+  background: rgba(5, 22, 28, 0.82);
+}
+
+.advisor-brief span {
+  margin: 0 0 3px;
+  color: var(--blue);
+  font-size: 12px;
+}
+
+.advisor-brief strong {
+  font-size: 15px;
+}
+
+.advisor-brief p {
+  margin: 7px 0 0;
+  color: rgba(238, 249, 247, 0.82);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.command-bar {
+  right: 10px;
+  bottom: 10px;
+  border: 1px solid rgba(240, 184, 76, 0.5);
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #f5c45c, #e99637);
+  border-color: rgba(255, 225, 157, 0.8);
+  color: #1c1608;
+}
+
 .layer-bar {
-  bottom: 14px;
+  gap: 8px;
+  border-radius: 10px;
+  background: rgba(5, 25, 33, 0.96);
+  border-color: rgba(126, 207, 211, 0.28);
+}
+
+.layer-bar {
+  bottom: 10px;
+}
+
+.layer-btn {
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 13px;
+}
+
+.layer-btn.active {
+  color: #05222c;
+  background: #71c7b0;
+}
+
+.layer-legend {
+  display: grid;
+  grid-template-columns: auto 110px auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  color: rgba(238, 249, 247, 0.76);
+  font-size: 11px;
+}
+
+.layer-legend i {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #440154, #3b528b, #21918c, #5ec962, #fde725);
+}
+
+.year-transition-panel {
+  pointer-events: auto;
+}
+
+.year-transition-panel .ghost-btn {
+  margin-top: 10px;
+}
+
+.tradeoff-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(240, 184, 76, 0.38);
+  border-radius: 10px;
+  background: rgba(84, 53, 11, 0.2);
+}
+
+.tradeoff-note > span {
+  color: var(--warn);
+  font-weight: 900;
+}
+
+.tradeoff-note ul {
+  margin: 7px 0 0;
+  padding-left: 20px;
+}
+
+.evidence-entry.selected {
+  border-color: rgba(114, 211, 157, 0.8);
+  background: rgba(22, 74, 60, 0.58);
+}
+
+.evidence-select-btn {
+  width: 100%;
+  margin-top: 9px;
+  border: 1px solid rgba(114, 211, 157, 0.58);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(18, 76, 64, 0.65);
+}
+
+.scenario-option:disabled {
+  filter: grayscale(0.7);
+}
+
+.scenario-picker {
+  border: 1px solid rgba(126, 207, 211, 0.24);
+  border-radius: 9px;
+  background: rgba(3, 18, 24, 0.5);
+}
+
+.scenario-picker summary {
+  padding: 11px 13px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.scenario-picker[open] {
+  padding: 0 12px 12px;
+}
+
+.scenario-picker[open] summary {
+  margin: 0 -12px 8px;
+  border-bottom: 1px solid rgba(126, 207, 211, 0.2);
+}
+
+.briefing-card h1 {
+  font-size: clamp(34px, 4vw, 46px);
+}
+
+.briefing-card > p {
+  margin: 8px 0;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 @media (max-width: 1100px) {
+  .mission-chip,
+  .district-chip-panel {
+    top: 146px;
+  }
+
   .layer-bar {
-    bottom: 76px;
+    bottom: 78px;
+  }
+}
+
+@media (max-width: 760px) {
+  .top-hud {
+    gap: 7px;
+  }
+
+  .brand-lockup {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .brand-lockup strong {
+    font-size: 15px;
+  }
+
+  .metric-strip {
+    padding-bottom: 2px;
+  }
+
+  .metric {
+    min-width: 78px;
+  }
+
+  .metric strong {
+    font-size: 18px;
+  }
+
+  .mission-chip {
+    top: 142px;
+    max-height: 27vh;
+  }
+
+  .district-chip-panel {
+    display: block;
+    top: auto;
+    right: 10px;
+    bottom: 206px;
+    left: 10px;
+    width: auto;
+    max-height: 118px;
+    padding: 10px;
+  }
+
+  .district-chip-panel .advisor-brief,
+  .district-chip-panel > .text-link {
+    display: none;
+  }
+
+  .mini-stat-row {
+    grid-template-columns: repeat(6, minmax(58px, 1fr));
+    overflow-x: auto;
+  }
+
+  .layer-bar {
+    right: 10px;
+    left: 10px;
+    min-width: 0;
+    max-width: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .layer-bar {
+    bottom: 104px;
+  }
+
+  .layer-legend,
+  .layer-bar > span {
+    display: none;
+  }
+
+  .layer-btn {
+    flex: 0 0 auto;
+  }
+
+  .command-bar {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    padding: 8px;
+  }
+
+  .command-bar > div:first-child {
+    display: none;
+  }
+
+  .dock-actions {
+    width: 100%;
+  }
+
+  .dock-actions button {
+    min-width: 0;
+    padding: 10px 8px;
+    font-size: 13px;
+  }
+
+  .briefing-card,
+  .guide-card,
+  .policy-detail-card,
+  .policy-board-panel {
+    max-height: calc(100dvh - 20px);
+    padding: 20px 16px;
+  }
+
+  .briefing-card h1,
+  .guide-card h1,
+  .policy-detail-card h1,
+  .policy-board-panel h1 {
+    font-size: 30px;
+  }
+
+  .briefing-card p,
+  .guide-card p,
+  .policy-detail-card p,
+  .policy-detail-card li,
+  .policy-board-panel p {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -1,7 +1,6 @@
-import { CIVIC_CHALLENGES, getRandomChallengeForTurn } from '../content/cityScenario';
+import { CIVIC_CHALLENGES, getChallengeForMissionTurn } from '../content/cityScenario';
 import { startMission as startMissionFlow, updateMissionProgress } from '../content/missions';
-import { buildCell, CELL_INFO, convertCellsForPolicy, deriveSurface } from './cells';
-import type { BuildTool } from './cells';
+import { convertCellsForPolicy, deriveSurface } from './cells';
 import { clamp, clamp01, round, weightedAverage } from './math';
 import { getPolicy } from './policies';
 import { getScenario } from './scenarios';
@@ -16,7 +15,7 @@ import type {
   TurnResolution
 } from './types';
 
-// P2：面積型參數（不透水/樹冠/太陽能）由地格聚合，政策對它們的效果改為「轉換地格」。
+// 面積型參數由政策所改變的地表格網聚合，玩家不直接編輯地格。
 const DISTRICT_SURFACE_KEYS = ['imperviousness', 'canopyCover', 'solarCoverage'] as const;
 
 const DISTRICT_UNIT_KEYS: DistrictMetricKey[] = [
@@ -40,6 +39,19 @@ const CITY_SCORE_KEYS: CityMetricKey[] = [
   'energySecurity',
   'educationScore'
 ];
+
+const CITY_BASELINES: Record<CityMetricKey, number> = {
+  emissions: 72,
+  heatRisk: 0,
+  floodRisk: 0,
+  airQualityRisk: 0,
+  publicHealth: 0,
+  equity: 0,
+  publicTrust: 62,
+  biodiversity: 43,
+  energySecurity: 55,
+  educationScore: 42
+};
 
 const PREVIEW_KEYS = [
   'budget',
@@ -68,7 +80,9 @@ export function startMission(state: CityState): CityState {
 }
 
 export function getPoliciesUsedThisTurn(state: CityState): number {
-  return state.appliedPolicies.filter((entry) => entry.turn === state.turn).length;
+  return state.appliedPolicies.filter(
+    (entry) => entry.turn === state.turn && entry.year === state.year && entry.missionId === state.mission.id
+  ).length;
 }
 
 export function getPoliciesRemainingThisTurn(state: CityState): number {
@@ -117,6 +131,7 @@ export function applyPolicyToState(
         year: next.year,
         policyId: policy.id,
         policyName: policy.name,
+        missionId: next.mission.id,
         targetDistrictId: policy.target === 'district' ? districtId : undefined,
         note: `${targetDistrictName}: ${policy.evidencePrompt}`
       },
@@ -167,9 +182,7 @@ export function advanceYear(state: CityState): CityState {
   const resolvedChallenge = state.currentChallenge;
   let next = cloneState(state);
 
-  for (const [key, value] of Object.entries(resolvedChallenge.pressure) as [CityMetricKey, number][]) {
-    next[key] = clamp(next[key] + value);
-  }
+  next.turnPressure = { ...resolvedChallenge.pressure };
 
   next.budget = round(next.budget + 18 + next.publicTrust * 0.04 - next.emissions * 0.03);
   next.year += 1;
@@ -199,7 +212,12 @@ export function advanceYear(state: CityState): CityState {
     pm25UgM3: round(Math.max(6, next.climateSignals.pm25UgM3 + next.airQualityRisk / 280 - 0.12), 1)
   };
 
-  next.currentChallenge = getRandomChallengeForTurn(next.seed, next.turn, resolvedChallenge.id);
+  next.currentChallenge = getChallengeForMissionTurn(
+    next.mission.id,
+    next.seed,
+    next.turn,
+    resolvedChallenge.id
+  );
   next = recalculateCityMetrics(next);
 
   const resolution: TurnResolution = {
@@ -227,52 +245,6 @@ export function advanceYear(state: CityState): CityState {
   return updateMissionProgress(next, { allowCompletion: true });
 }
 
-/**
- * P2 建造模式：玩家直接在地格上建造（種樹/透水鋪面/太陽能/滯洪水體）。
- * 與政策不同：不占政策額度，但每格花費小額預算，立即生效。
- */
-export function applyCellBuild(
-  state: CityState,
-  districtId: string,
-  cellIndex: number,
-  tool: BuildTool
-): CityState {
-  if (state.phase === 'complete') return state;
-  if (state.mission.status !== 'active') {
-    return appendLog(state, '請先啟動任務或進入沙盒，再進行建造。');
-  }
-
-  const district = state.districts.find((entry) => entry.id === districtId);
-  if (!district) return state;
-
-  const cost = CELL_INFO[tool].buildCost ?? 0;
-  if (state.budget < cost) {
-    return appendLog(state, `預算不足，建造「${CELL_INFO[tool].label}」需要 ${cost} 百萬。`);
-  }
-
-  const nextCells = buildCell(district.cells, cellIndex, tool);
-  if (!nextCells) {
-    return appendLog(
-      state,
-      tool === 'solar'
-        ? '太陽能只能鋪設在建築或硬鋪面上。'
-        : '這個地格無法直接改建（建築需先透過政策更新）。'
-    );
-  }
-
-  let next = cloneState(state);
-  next.budget = round(next.budget - cost);
-  const targetDistrict = next.districts.find((entry) => entry.id === districtId);
-  if (targetDistrict) targetDistrict.cells = nextCells;
-  next = recalculateCityMetrics(next);
-  next.eventLog = [
-    `已於${district.name}建造「${CELL_INFO[tool].label}」（−${cost} 百萬）。${CELL_INFO[tool].scienceNote}`,
-    ...next.eventLog
-  ].slice(0, 10);
-
-  return updateMissionProgress(next, { allowCompletion: false });
-}
-
 export function replaceClimateSignals(state: CityState, signals: ClimateSignals): CityState {
   let next = cloneState(state);
   next.climateSignals = signals;
@@ -286,24 +258,34 @@ export function recalculateCityMetrics(state: CityState): CityState {
   next.districts = next.districts.map((district) => recalculateDistrict(district, next.climateSignals));
   const climateScores = getClimateHazardLayer(next.climateSignals);
 
-  next.heatRisk = round(weightedAverage(next.districts, (d) => d.heatExposure, (d) => d.population));
-  next.floodRisk = round(weightedAverage(next.districts, (d) => d.floodExposure, (d) => d.population));
-  next.airQualityRisk = round(weightedAverage(next.districts, (d) => d.airPollution, (d) => d.population));
-  next.publicHealth = round(weightedAverage(next.districts, (d) => d.healthIndex, (d) => d.population));
-  next.equity = round(weightedAverage(next.districts, (d) => d.equityIndex, (d) => d.population));
+  next.heatRisk = withCityEffects(next, 'heatRisk', weightedAverage(next.districts, (d) => d.heatExposure, (d) => d.population));
+  next.floodRisk = withCityEffects(next, 'floodRisk', weightedAverage(next.districts, (d) => d.floodExposure, (d) => d.population));
+  next.airQualityRisk = withCityEffects(next, 'airQualityRisk', weightedAverage(next.districts, (d) => d.airPollution, (d) => d.population));
+  next.publicHealth = withCityEffects(next, 'publicHealth', weightedAverage(next.districts, (d) => d.healthIndex, (d) => d.population));
+  next.equity = withCityEffects(next, 'equity', weightedAverage(next.districts, (d) => d.equityIndex, (d) => d.population));
 
   const averageTransit = weightedAverage(next.districts, (d) => d.transitAccess, (d) => d.population);
   const averageSolar = weightedAverage(next.districts, (d) => d.solarCoverage, (d) => d.population);
   const averageCanopy = weightedAverage(next.districts, (d) => d.canopyCover, (d) => d.population);
   const averageIndustry = weightedAverage(next.districts, (d) => d.industryLoad, (d) => d.population);
 
-  next.emissions = clamp(
-    round(next.emissions + averageIndustry * 1.5 - averageSolar * 4.2 - averageTransit * 1.8 + next.heatRisk * 0.01)
+  next.emissions = withCityEffects(
+    next,
+    'emissions',
+    CITY_BASELINES.emissions + averageIndustry * 1.5 - averageSolar * 4.2 - averageTransit * 1.8 + next.heatRisk * 0.01
   );
-  next.biodiversity = clamp(round(next.biodiversity + averageCanopy * 4 - next.floodRisk * 0.02));
-  next.energySecurity = clamp(
-    round(next.energySecurity + averageSolar * 6 + climateScores.solarOpportunity * 0.04 - next.heatRisk * 0.025)
+  next.biodiversity = withCityEffects(
+    next,
+    'biodiversity',
+    CITY_BASELINES.biodiversity + averageCanopy * 4 - next.floodRisk * 0.02
   );
+  next.energySecurity = withCityEffects(
+    next,
+    'energySecurity',
+    CITY_BASELINES.energySecurity + averageSolar * 6 + climateScores.solarOpportunity * 0.04 - next.heatRisk * 0.025
+  );
+  next.publicTrust = withCityEffects(next, 'publicTrust', CITY_BASELINES.publicTrust);
+  next.educationScore = withCityEffects(next, 'educationScore', CITY_BASELINES.educationScore);
 
   next.sdgScore = round(
     0.17 * next.publicHealth +
@@ -331,7 +313,7 @@ function applyPolicyEffects(state: CityState, policy: PolicyAction, districtId: 
 
   if (policy.cityEffects) {
     for (const [key, value] of Object.entries(policy.cityEffects) as [CityMetricKey, number][]) {
-      next[key] = clamp(next[key] + value);
+      next.cityModifiers[key] = round((next.cityModifiers[key] ?? 0) + value, 2);
     }
   }
 
@@ -341,7 +323,7 @@ function applyPolicyEffects(state: CityState, policy: PolicyAction, districtId: 
     if (policy.districtEffects) {
       for (const [key, value] of Object.entries(policy.districtEffects) as [DistrictMetricKey, number][]) {
         if ((DISTRICT_SURFACE_KEYS as readonly string[]).includes(key)) {
-          // P2：面積效果 → 地格轉換（種樹 = 真的把硬鋪面格換成綠地格）
+          // 政策的面積效果轉成地表變化，供科學模型與 3D 場景共同呈現。
           target.cells = convertCellsForPolicy(
             target.cells,
             key as (typeof DISTRICT_SURFACE_KEYS)[number],
@@ -352,7 +334,11 @@ function applyPolicyEffects(state: CityState, policy: PolicyAction, districtId: 
           target[key] = clamp01(target[key] + value);
         }
 
-        if (DISTRICT_SCORE_KEYS.includes(key)) {
+        if (key === 'healthIndex') {
+          target.healthModifier = round(target.healthModifier + value, 2);
+        } else if (key === 'resilienceIndex') {
+          target.resilienceModifier = round(target.resilienceModifier + value, 2);
+        } else if (DISTRICT_SCORE_KEYS.includes(key)) {
           target[key] = clamp(target[key] + value);
         }
       }
@@ -362,9 +348,21 @@ function applyPolicyEffects(state: CityState, policy: PolicyAction, districtId: 
   return recalculateCityMetrics(next);
 }
 
+function withCityEffects(state: CityState, key: CityMetricKey, base: number): number {
+  return clamp(round(base + (state.cityModifiers[key] ?? 0) + (state.turnPressure[key] ?? 0)));
+}
+
+export function toggleEvidenceSelection(state: CityState, evidenceId: string): CityState {
+  if (!state.evidenceLog.some((entry) => entry.id === evidenceId)) return state;
+  const selectedEvidenceIds = state.selectedEvidenceIds.includes(evidenceId)
+    ? state.selectedEvidenceIds.filter((id) => id !== evidenceId)
+    : [...state.selectedEvidenceIds, evidenceId].slice(-6);
+  return updateMissionProgress({ ...state, selectedEvidenceIds }, { allowCompletion: true });
+}
+
 function recalculateDistrict(district: DistrictState, climate: ClimateSignals): DistrictState {
-  // P2：地格是地表的單一真實來源——面積參數由地格聚合，
-  // 滯洪水體/避難設施格在計算時提供防洪與降溫加成（不寫回，避免複利累積）。
+  // 地格是政策落地後的地表狀態；面積參數由此聚合。
+  // 滯洪水體/避難設施提供防洪與降溫加成（不寫回，避免複利累積）。
   const surface = deriveSurface(district.cells);
   const effective: DistrictState = {
     ...district,
@@ -434,6 +432,7 @@ function collectTurnEvidence(before: CityState, after: CityState): CityState['ev
 
   return [
     {
+      id: `${after.mission.id}-${after.year}-climate`,
       turn: after.turn,
       year: after.year,
       kind: 'climate' as const,
@@ -442,6 +441,7 @@ function collectTurnEvidence(before: CityState, after: CityState): CityState['ev
       source: `SSP 情境（${after.scenario.toUpperCase()}）+ Open-Meteo / NASA POWER 基準`
     },
     {
+      id: `${after.mission.id}-${after.year}-district-${selected.id}`,
       turn: after.turn,
       year: after.year,
       kind: 'district' as const,
@@ -450,6 +450,7 @@ function collectTurnEvidence(before: CityState, after: CityState): CityState['ev
       source: 'Ziter et al. 2019 PNAS（UHI 靈敏度）、合理化公式（逕流）'
     },
     {
+      id: `${after.mission.id}-${after.year}-policy`,
       turn: after.turn,
       year: after.year,
       kind: 'policy' as const,
@@ -493,7 +494,11 @@ function cloneState(state: CityState): CityState {
     districts: state.districts.map((district) => ({ ...district, cells: [...district.cells] })),
     appliedPolicies: state.appliedPolicies.map((entry) => ({ ...entry })),
     eventLog: [...state.eventLog],
-    evidenceLog: state.evidenceLog.map((entry) => ({ ...entry }))
+    evidenceLog: state.evidenceLog.map((entry) => ({ ...entry })),
+    selectedEvidenceIds: [...state.selectedEvidenceIds],
+    completedMissionIds: [...state.completedMissionIds],
+    cityModifiers: { ...state.cityModifiers },
+    turnPressure: { ...state.turnPressure }
   };
 }
 

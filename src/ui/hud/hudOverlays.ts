@@ -40,6 +40,7 @@ export function yearTransitionOverlay(state: CityState): string {
         <i></i>
       </div>
       <p>正在執行 ${used} 項政策，接著結算本年度意外事件。</p>
+      <button class="ghost-btn" type="button" data-skip-transition>跳過演出，立即結算</button>
     </section>
   `;
 }
@@ -76,22 +77,22 @@ export function briefingOverlay(state: CityState, dataStatus: DataLoadStatus, da
         <div class="briefing-objectives">
           ${mission.objectives.map((objective) => `<div>${objective.label}</div>`).join('')}
         </div>
-        <div class="scenario-picker">
-          <strong>選擇副本任務</strong>
-          <p>四個獨立副本，各自考驗不同的氣候調適策略。隨時可重新開始換副本。</p>
+        <details class="scenario-picker">
+          <summary>戰役章節：${mission.title}</summary>
+          <p>四章連續戰役會保留城市改造成果；完成前一章後解鎖下一章。</p>
           <div class="mission-options">
             ${MISSION_CATALOG.map(
               (entry) => `
-                <button type="button" class="scenario-option ${state.missionIndex === entry.index ? 'active' : ''}" data-mission="${entry.index}">
+                <button type="button" class="scenario-option ${state.missionIndex === entry.index ? 'active' : ''}" data-mission="${entry.index}" ${entry.index > state.unlockedMissionIndex ? 'disabled' : ''}>
                   <strong>${entry.title}</strong>
-                  <p>${entry.blurb}</p>
+                  <p>${entry.index > state.unlockedMissionIndex ? '完成前一章後解鎖。' : entry.blurb}</p>
                 </button>
               `
             ).join('')}
           </div>
-        </div>
-        <div class="scenario-picker">
-          <strong>選擇全球排放情境（IPCC AR6 SSP）</strong>
+        </details>
+        <details class="scenario-picker">
+          <summary>全球排放情境：${state.scenario.toUpperCase()}</summary>
           <p>城市減排無法改變全球溫度——「減緩」是全球集體行動，「調適」才是城市能掌握的。情境決定逐年升溫與極端事件趨勢。</p>
           <div class="scenario-options">
             ${SSP_SCENARIOS.map(
@@ -104,7 +105,7 @@ export function briefingOverlay(state: CityState, dataStatus: DataLoadStatus, da
               `
             ).join('')}
           </div>
-        </div>
+        </details>
         <div class="briefing-data-note ${hasError ? 'error' : isReady ? 'ready' : ''}">
           <strong>${isReady ? '資料來源已整理' : hasError ? '資料載入失敗' : '任務開始前需先載入公開資料'}</strong>
           <p>
@@ -146,7 +147,7 @@ export function endingOverlay(state: CityState): string {
           ${mission.objectives.map(objectiveRow).join('')}
         </div>
         <div class="briefing-actions">
-          <button class="primary-btn large" type="button" data-pick-mission>選擇其他副本</button>
+          <button class="primary-btn large" type="button" data-pick-mission>${won ? (state.missionIndex >= 3 ? '進入自由沙盒' : '繼續下一章') : '重試本章'}</button>
           <button class="ghost-btn large" type="button" data-restart-game>重新開始整場遊戲</button>
         </div>
       </div>
@@ -196,6 +197,7 @@ export function policyDetailOverlay(state: CityState, policy: PolicyAction): str
               <span>課堂討論</span>
               <p>${policy.classroomPrompt}</p>
             </div>
+            ${policy.tradeoffs?.length ? `<div class="tradeoff-note"><span>執行取捨</span><ul>${policy.tradeoffs.map((item) => `<li>${item}</li>`).join('')}</ul></div>` : ''}
           </section>
         </div>
 
@@ -229,11 +231,14 @@ export function evidenceOverlay(state: CityState): string {
                 ${entries
                   .map(
                     (entry) => `
-                      <div class="evidence-entry ${entry.kind}">
+                      <div class="evidence-entry ${entry.kind} ${state.selectedEvidenceIds.includes(entry.id) ? 'selected' : ''}">
                         <small>${entry.year} 年 · ${kindLabel[entry.kind]}</small>
                         <strong>${escapeHtml(entry.label)}</strong>
                         <p>${escapeHtml(entry.value)}</p>
                         <em>來源：${escapeHtml(entry.source)}</em>
+                        <button type="button" class="evidence-select-btn" data-toggle-evidence="${escapeHtml(entry.id)}" aria-pressed="${state.selectedEvidenceIds.includes(entry.id)}">
+                          ${state.selectedEvidenceIds.includes(entry.id) ? '已選入論證' : '選入 CER 論證'}
+                        </button>
                       </div>
                     `
                   )

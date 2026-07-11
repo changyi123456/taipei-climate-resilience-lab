@@ -80,6 +80,11 @@ export function districtChip(state: CityState, selectedDistrict: DistrictState):
         ${miniStat('韌性', selectedDistrict.resilienceIndex, true)}
       </div>
       <button class="text-link" type="button" data-open-guide="district">街區詳情</button>
+      <div class="advisor-brief">
+        <span>${state.mission.advisorRole}</span>
+        <strong>${state.mission.advisorName}</strong>
+        <p>${state.mission.advisorMessage}</p>
+      </div>
     </section>
   `;
 }
@@ -91,7 +96,7 @@ export function commandBar(state: CityState, audioEnabled: boolean, yearProcessi
   return `
     <section class="command-bar" aria-label="主要行動">
       <div>
-        <span>政策審議</span>
+        <span>${state.mode === 'sandbox' ? '自由實驗' : '政策審議'}</span>
         <strong>本回合還可確認 ${remaining} 項政策</strong>
       </div>
       <div class="dock-actions">
